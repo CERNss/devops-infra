@@ -1,4 +1,17 @@
 
+infra install base --mirror --dry-run
+↓
+cmd/install_base.go
+↓
+orchestration.InstallBase(ctx, options)
+↓
+DetectOS
+NewLocalExecutor(execOpts)
+NewOSDriver(osInfo, exec)
+↓
+base.New(...).Install()
+
+
 ┌──────────────────────────────────────┐
 │            CLI Layer (cobra)         │
 │ infra install base / k8s / k3s / k3d │

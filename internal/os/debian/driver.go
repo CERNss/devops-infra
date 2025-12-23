@@ -11,10 +11,12 @@ type Driver struct {
 	exec executor.Executor
 }
 
-func New(opts executor.Options) *Driver {
-	return &Driver{
-		exec: executor.NewLocal(opts),
-	}
+func New(exec executor.Executor) *Driver {
+	return &Driver{exec: exec}
+}
+
+func (d *Driver) Exec() executor.Executor {
+	return d.exec
 }
 
 func (d *Driver) Name() string   { return "debian-driver" }

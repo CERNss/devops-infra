@@ -3,26 +3,36 @@ package cmd
 import (
 	"devops-infra/internal/executor"
 	"github.com/spf13/cobra"
-	"os"
 )
 
+var execOpts executor.Options
+
 var rootCmd = &cobra.Command{
-	Use:   "devops-lab",
-	Short: "DevOps Lab Platform CLI",
-	Long:  "DevOps Lab - local DevOps platform based on k3d + Helm",
+	Use:   "infra",
+	Short: "Infrastructure installer",
 }
 
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
-	}
-
+func Execute() error {
+	return rootCmd.Execute()
 }
-
-var execOpts = executor.Options{}
 
 func init() {
-	rootCmd.PersistentFlags().BoolVar(&execOpts.Sudo, "sudo", true, "use sudo")
-	rootCmd.PersistentFlags().BoolVar(&execOpts.DryRun, "dry-run", false, "dry run")
-	rootCmd.PersistentFlags().BoolVar(&execOpts.Verbose, "verbose", false, "verbose output")
+	rootCmd.PersistentFlags().BoolVar(
+		&execOpts.Sudo,
+		"sudo",
+		true,
+		"run commands with sudo",
+	)
+	rootCmd.PersistentFlags().BoolVar(
+		&execOpts.DryRun,
+		"dry-run",
+		false,
+		"print commands without executing",
+	)
+	rootCmd.PersistentFlags().BoolVar(
+		&execOpts.Verbose,
+		"verbose",
+		false,
+		"verbose output",
+	)
 }
