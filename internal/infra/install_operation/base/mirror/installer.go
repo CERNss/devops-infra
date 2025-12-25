@@ -2,11 +2,11 @@ package mirror
 
 import (
 	"context"
-	osdriver "devops-infra/internal/infra/os"
 	"fmt"
 	"strings"
 
-	"devops-infra/internal/utils/path"
+	"devops-infra/internal/infra/assets"
+	osdriver "devops-infra/internal/infra/os"
 )
 
 type Options struct {
@@ -39,7 +39,7 @@ func (m *Installer) Install(ctx context.Context) error {
 		return nil
 	}
 
-	scriptPath, err := path.ResolvePath("scripts/mirror/main.sh")
+	scriptPath, err := assets.EnsureMirrorMainScript()
 	if err != nil {
 		return err
 	}

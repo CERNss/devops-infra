@@ -23,3 +23,7 @@ build/*
 /.idea/
 *.iml
 vendor/*
+
+# Mirror scripts downloaded at runtime
+/scripts/mirror/main.sh
+/scripts/mirror/docker.sh

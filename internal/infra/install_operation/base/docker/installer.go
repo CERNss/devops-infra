@@ -2,12 +2,12 @@ package docker
 
 import (
 	"context"
-	osdriver "devops-infra/internal/infra/os"
 	"fmt"
 	"strings"
 
 	"devops-infra/internal/constant"
-	"devops-infra/internal/utils/path"
+	"devops-infra/internal/infra/assets"
+	osdriver "devops-infra/internal/infra/os"
 )
 
 type InstallMode string
@@ -80,7 +80,7 @@ func (d *Installer) Install(ctx context.Context) error {
 		}
 		return exec.Run("ln -sf " + nerdctlPath + " /usr/bin/docker")
 	case InstallModeOfficial, "":
-		scriptPath, err := path.ResolvePath("scripts/mirror/docker.sh")
+		scriptPath, err := assets.EnsureMirrorDockerScript()
 		if err != nil {
 			return err
 		}

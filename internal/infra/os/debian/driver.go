@@ -1,11 +1,11 @@
 package debian
 
 import (
-	"devops-infra/internal/infra/executor"
 	"fmt"
 	"strings"
 
-	"devops-infra/internal/utils/path"
+	"devops-infra/internal/infra/assets"
+	"devops-infra/internal/infra/executor"
 )
 
 type Driver struct {
@@ -69,7 +69,7 @@ func (d *Driver) Sysctl(settings map[string]string) error {
 }
 
 func (d *Driver) SwitchMirror() error {
-	scriptPath, err := path.ResolvePath("scripts/mirror/main.sh")
+	scriptPath, err := assets.EnsureMirrorMainScript()
 	if err != nil {
 		return err
 	}
