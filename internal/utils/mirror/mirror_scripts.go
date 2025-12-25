@@ -1,4 +1,4 @@
-package assets
+package mirror
 
 import (
 	"fmt"

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"devops-infra/internal/infra/assets"
 	"devops-infra/internal/infra/executor"
+	"devops-infra/internal/utils/mirror"
 )
 
 type Driver struct {
@@ -69,7 +69,7 @@ func (d *Driver) Sysctl(settings map[string]string) error {
 }
 
 func (d *Driver) SwitchMirror() error {
-	scriptPath, err := assets.EnsureMirrorMainScript()
+	scriptPath, err := mirror.EnsureMirrorMainScript()
 	if err != nil {
 		return err
 	}

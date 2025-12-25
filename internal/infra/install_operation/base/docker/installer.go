@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"devops-infra/internal/constant"
-	"devops-infra/internal/infra/assets"
 	osdriver "devops-infra/internal/infra/os"
+	"devops-infra/internal/utils/mirror"
 )
 
 type InstallMode string
@@ -80,7 +80,7 @@ func (d *Installer) Install(ctx context.Context) error {
 		}
 		return exec.Run("ln -sf " + nerdctlPath + " /usr/bin/docker")
 	case InstallModeOfficial, "":
-		scriptPath, err := assets.EnsureMirrorDockerScript()
+		scriptPath, err := mirror.EnsureMirrorDockerScript()
 		if err != nil {
 			return err
 		}
