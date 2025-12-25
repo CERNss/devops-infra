@@ -158,6 +158,25 @@ mirror_list_intranet=(
     "mirrors.ivolces.com"
 )
 
+## 赞助商广告
+SPONSOR_ADS=(
+    "1Panel · Linux 面板｜极简运维 ➜  \033[3mhttps://1panel.cn\033[0m"
+    "多途云 · 智能化防护，每一次连接皆在安全之下 ➜  \033[3mhttps://www.duotuyun.com\033[0m"
+    "毫秒镜像 · 专为中国开发者提供Docker镜像加速下载服务 ➜  \033[3mhttps://1ms.run\033[0m"
+    "林枫云 · 专注独立IP高频VPS｜R9/i9系列定制 ➜  \033[3mhttps://www.dkdun.cn\033[0m"
+    "不死鸟CDN · 香港日本高防CDN，免实名/免备案，轻松阻断DDOS/CC攻击 ➜  \033[3mhttps://www.bsncdn.org\033[0m"
+    "青叶云 · 香港1T高防｜自助防火墙，无视CC｜大带宽回国优化线路 ➜  \033[3mhttps://www.qingyeyun.com\033[0m"
+    "莱卡云 · 专业云计算服务器提供商 ➜  \033[3m https://www.lcayun.com\033[0m"
+    "云悠YUNYOO · 全球高性价比云服务器｜低至15.99元起 ➜  \033[3mhttps://yunyoo.cc\033[0m"
+    "HKGserver · 全球家宽｜双ISP｜住宅原生云服务器54元/月起 ➜  \033[3mhttps://www.hkgserver.com\033[0m"
+    "语鹿云盾 · 专业CDN加速、防御，亚太百兆三网优化CDN低至9元起 ➜  \033[3mhttps://www.lucdn.cn\033[0m"
+    "不二云 · 国内外建站快响应服务器的不二之选 ➜  \033[3mhttps://cb2.cn\033[0m"
+    "CN2network · 超低价优质机器免实名自动开通 ➜  \033[3mhttps://idc.cn2network.com\033[0m"
+    "破碎工坊云 · 专注高性能国内外云服务器 ➜  \033[3mhttps://www.crash.work\033[0m"
+    "润信云 · 国内挂机宝海外云服务器低至9.9元/月 ➜  \033[3mhttps://www.runxinyun.com\033[0m"
+    "浪浪云 · BGP网络让每一次连接都纵享丝滑，明码标价、无套路续费 ➜  \033[3mhttps://langlangy.cn\033[0m"
+)
+
 ##############################################################################
 
 ## 定义系统判定变量
@@ -675,7 +694,15 @@ function run_end() {
         echo ''
         return
     fi
-    echo ''
+    echo -e "\n✨ $(msg "end.moreInfo") 👉 \033[3mhttps://linuxmirrors.cn\033[0m"
+    if [[ "${#SPONSOR_ADS[@]}" -gt 0 ]]; then
+        echo -e "\n\033[2m$(msg "end.sponsorAds")\033[0m"
+        for ad in "${SPONSOR_ADS[@]}"; do
+            sleep 0.1
+            echo -e "  \033[2m${ad}\033[0m"
+        done
+    fi
+    echo -e "\n\033[3;1mPowered by \033[34mLinuxMirrors\033[0m\n"
 }
 
 function output_error() {
@@ -7886,6 +7913,8 @@ function msg_pack_zh_hans() {
         ['start.welcome']='欢迎使用 GNU/Linux 更换系统软件源脚本'
         ['start.runtimeEnv']='运行环境'
         ['start.dateTime']='系统时间'
+        ['end.moreInfo']='脚本运行完毕，更多使用教程详见官网'
+        ['end.sponsorAds']='【赞助商广告】'
         ['error.cmd.options.needConfirm']='请确认后重新输入'
         ['error.cmd.options.needSpecify']='请在该选项后指定{}'
         ['error.cmd.options.invalid']='命令选项 {} 无效，{}！'
@@ -8115,6 +8144,8 @@ function msg_pack_zh_hant() {
         ['start.welcome']='歡迎使用 GNU/Linux 更換系統軟體源腳本'
         ['start.runtimeEnv']='執行環境'
         ['start.dateTime']='系統時間'
+        ['end.moreInfo']='腳本執行完畢，更多使用教學詳見官網'
+        ['end.sponsorAds']='【贊助商廣告】'
         ['error.cmd.options.needConfirm']='請確認後重新輸入'
         ['error.cmd.options.needSpecify']='請在該選項後指定{}'
         ['error.cmd.options.invalid']='命令選項 {} 無效，{}！'
@@ -8338,6 +8369,7 @@ function msg_pack_zh_hant() {
         ['mirrors.abroad.67']='非洲 · Dimension Data · 南非'
         ['mirrors.abroad.68']='官方源'
     )
+    SPONSOR_ADS[0]="1Panel · 新一代的 Linux 伺服器維運管理面板 ➜  \033[3mhttps://1panel.cn\033[0m"
 }
 
 function msg_pack_en() {
@@ -8345,6 +8377,8 @@ function msg_pack_en() {
         ['start.welcome']='  GNU/Linux mirror switching script'
         ['start.runtimeEnv']='Runtime Env'
         ['start.dateTime']='System Time'
+        ['end.moreInfo']='Script execution completed, visit our website for more tutorials'
+        ['end.sponsorAds']='[Sponsor Ads]'
         ['error.cmd.options.needConfirm']='Please confirm and re-enter'
         ['error.cmd.options.needSpecify']='Please specify {} after this option'
         ['error.cmd.options.invalid']='Command option {} is invalid, {}!'
@@ -8566,6 +8600,9 @@ Issue Report {}'
         ['mirrors.abroad.66']='AF · Liquid Telecom · Kenya'
         ['mirrors.abroad.67']='AF · Dimension Data · South Africa'
         ['mirrors.abroad.68']='Official Source'
+    )
+    SPONSOR_ADS=(
+        "1Panel · Top-Rated Web-based Linux Server Management Tool ➜  \033[3mhttps://1panel.cn\033[0m"
     )
 }
 

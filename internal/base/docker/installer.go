@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	osdriver "devops-infra/internal/os"
-	"devops-infra/internal/utils/pathutil"
+	"devops-infra/internal/utils/path"
 )
 
 type InstallMode string
@@ -67,7 +67,7 @@ func (d *Installer) Install(ctx context.Context) error {
 		}
 		return exec.Run("ln -sf " + nerdctlPath + " /usr/bin/docker")
 	case InstallModeOfficial, "":
-		scriptPath, err := pathutil.ResolvePath("scripts/mirror/docker.sh")
+		scriptPath, err := path.ResolvePath("scripts/mirror/docker.sh")
 		if err != nil {
 			return err
 		}

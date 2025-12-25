@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"devops-infra/internal/executor"
-	"devops-infra/internal/utils/pathutil"
+	"devops-infra/internal/utils/path"
 )
 
 type Driver struct {
@@ -69,7 +69,7 @@ func (r *Driver) Sysctl(settings map[string]string) error {
 }
 
 func (r *Driver) SwitchMirror() error {
-	scriptPath, err := pathutil.ResolvePath("scripts/mirror/main.sh")
+	scriptPath, err := path.ResolvePath("scripts/mirror/main.sh")
 	if err != nil {
 		return err
 	}

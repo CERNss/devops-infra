@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	osdriver "devops-infra/internal/os"
-	"devops-infra/internal/utils/pathutil"
+	"devops-infra/internal/utils/path"
 )
 
 type Installer struct {
@@ -28,7 +28,7 @@ func (m *Installer) Install(ctx context.Context) error {
 		return nil
 	}
 
-	scriptPath, err := pathutil.ResolvePath("scripts/mirror/main.sh")
+	scriptPath, err := path.ResolvePath("scripts/mirror/main.sh")
 	if err != nil {
 		return err
 	}
