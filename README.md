@@ -48,61 +48,52 @@
 
 ## 架构与流程
 命令流程示例：`devops-infra install base --mirror --dry-run`
-↓
+
+```
 cmd/install_base.go
-↓
-orchestration.InstallBase(ctx, options)
-↓
-DetectOS
-NewLocalExecutor(execOpts)
-NewOSDriver(osInfo, exec)
-↓
-base.New(...).Install()
+  ↓
+infra/orchestration.InstallBase(ctx, options)
+  ↓
+os.Detect → executor.NewLocal(execOpts) → os.NewDriver(osInfo, exec)
+  ↓
+install_operation/base.New(...).Install()
+```
 
+```
+┌──────────────────────────────────────────────────────────────┐
+│ CLI Layer (cobra)                                            │
+│ install base / k8s / k3s / k3d | status / doctor / uninstall │
+└──────────────────────────────▲───────────────────────────────┘
+                               │
+┌──────────────────────────────┴───────────────────────────────┐
+│ Infra Orchestration                                          │
+│ flow / dependency / order / idempotency                      │
+└──────────────────────────────▲───────────────────────────────┘
+                               │
+┌──────────────────────────────┴───────────────────────────────┐
+│ Install Operation                                            │
+│ Base: docker / containerd / kernel / tools / mirror          │
+│ Platform: k8s / k3s / k3d                                    │
+└──────────────────────────────▲───────────────────────────────┘
+                               │
+┌──────────────────────────────┴───────────────────────────────┐
+│ OS Driver + Executor                                         │
+│ debian / rhel | apt / yum / systemd / sysctl                 │
+│ executor: local / remote                                     │
+└──────────────────────────────────────────────────────────────┘
+```
 
-┌──────────────────────────────────────┐
-│            CLI Layer (cobra)         │
-│ devops-infra install base / k8s / k3s / k3d │
-│    devops-infra status / doctor / uninstall │
-└──────────────────▲───────────────────┘
-
-┌──────────────────┴───────────────────┐
-│          Orchestration Layer         │
-│  - Install Flow                      │
-│  - Dependency Check                  │
-│  - Order & Idempotency               │
-└──────────────────▲───────────────────┘
-
-┌──────────────────┴───────────────────┐
-│             Domain Layer             │
-│  Base Layer        Platform Layer    │
-│  docker            k8s               │
-│  containerd        k3s               │
-│  kernel            k3d               │
-└──────────────────▲───────────────────┘
-
-┌──────────────────┴───────────────────┐
-│            OS Driver Layer           │
-│  debian-family / rhel-family         │
-│  apt / yum / systemd / sysctl        │
-└──────────────────────────────────────┘
-
-
-┌────────────────────────────┐
-│        Platform Layer      │
-│       k8s / k3s / k3d      │
-│                            │
-└──────────────▲─────────────┘
-               │
-┌──────────────┴─────────────┐
-│        Base Layer          │
-│    docker / containerd     │
-│  kernel / sysctl / cgroup  │
-│                            │
-└──────────────▲─────────────┘
-               │
-┌──────────────┴─────────────┐
-│       OS Driver Layer      │
-│  ubuntu / debian / rhel    │
-│                            │
-└────────────────────────────┘
+```
+┌──────────────────────────────────────────┐
+│         Install Operation Layer          │
+│ Base: docker / containerd / kernel       │
+│ tools / mirror                           │
+│ Platform: k8s / k3s / k3d                │
+└──────────────────────▲───────────────────┘
+                       │
+┌──────────────────────┴───────────────────┐
+│            OS Driver + Executor          │
+│ debian / rhel | apt / yum / systemd      │
+│ sysctl + executor (local / remote)       │
+└──────────────────────────────────────────┘
+```
