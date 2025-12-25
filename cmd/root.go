@@ -8,7 +8,7 @@ import (
 var execOpts executor.Options
 
 var rootCmd = &cobra.Command{
-	Use:   "infra",
+	Use:   "devops-infra",
 	Short: "Infrastructure installer",
 }
 
