@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"strings"
 
 	osdriver "devops-infra/internal/os"
 )
@@ -17,10 +18,21 @@ func New(os osdriver.Driver) *Installer {
 func (t *Installer) Name() string { return "common-tools" }
 
 func (t *Installer) IsInstalled(ctx context.Context) bool {
-	return false
+	exec := t.os.Exec()
+	checks := []string{"curl", "gpg", "tar", "ip"}
+	for _, binary := range checks {
+		output, err := exec.RunWithOutput("command -v " + binary)
+		if err != nil || strings.TrimSpace(output) == "" {
+			return false
+		}
+	}
+	return true
 }
 
 func (t *Installer) Install(ctx context.Context) error {
+	if t.IsInstalled(ctx) {
+		return nil
+	}
 	err := t.os.Update()
 	if err != nil {
 		return err

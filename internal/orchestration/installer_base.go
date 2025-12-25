@@ -14,9 +14,15 @@ import (
 )
 
 type InstallBaseOptions struct {
-	ExecOpts          executor.Options
-	EnableMirror      bool
-	DockerInstallMode docker.InstallMode
+	ExecOpts              executor.Options
+	EnableMirror          bool
+	DockerInstallMode     docker.InstallMode
+	DockerRegistryMirrors []string
+	ContainerdVersion     string
+	ContainerdArch        string
+	ContainerdChecksum    string
+	SkipKernel            bool
+	SkipTools             bool
 }
 
 func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
@@ -37,20 +43,37 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 
 	mode := opts.DockerInstallMode
 	if mode == "" {
-		mode = docker.InstallModeMirrorScript
+		mode = docker.InstallModeOfficial
 	}
 
 	// 4. Build base installer
-	components := []base.Component{
-		kernel.New(driver),
-		mirror.New(driver, opts.EnableMirror),
-		tools.New(driver),
+	components := []base.Component{}
+	if !opts.SkipKernel {
+		components = append(components, kernel.New(driver))
+	}
+	components = append(components, mirror.New(driver, opts.EnableMirror))
+	if !opts.SkipTools {
+		components = append(components, tools.New(driver))
 	}
 
-	if mode == docker.InstallModeNerdctlSymlink {
-		components = append(components, containerd.New(driver), docker.New(driver, mode))
+	containerdInstaller := containerd.New(driver, containerd.Options{
+		Version:  opts.ContainerdVersion,
+		Arch:     opts.ContainerdArch,
+		Checksum: opts.ContainerdChecksum,
+	})
+
+	if mode == docker.InstallModeNerdctl {
+		components = append(
+			components,
+			docker.New(driver, mode, opts.DockerRegistryMirrors),
+			containerdInstaller,
+		)
 	} else {
-		components = append(components, docker.New(driver, mode), containerd.New(driver))
+		components = append(
+			components,
+			docker.New(driver, mode, opts.DockerRegistryMirrors),
+			containerdInstaller,
+		)
 	}
 
 	installer := base.New(components...)

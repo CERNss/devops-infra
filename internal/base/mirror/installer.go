@@ -2,8 +2,10 @@ package mirror
 
 import (
 	"context"
+	"fmt"
 
 	osdriver "devops-infra/internal/os"
+	"devops-infra/internal/utils/pathutil"
 )
 
 type Installer struct {
@@ -26,7 +28,13 @@ func (m *Installer) Install(ctx context.Context) error {
 		return nil
 	}
 
-	return m.os.Exec().Run(
-		"bash scripts/mirror/main.sh",
-	)
+	scriptPath, err := pathutil.ResolvePath("scripts/mirror/main.sh")
+	if err != nil {
+		return err
+	}
+
+	return m.os.Exec().Run(fmt.Sprintf(
+		"bash %q",
+		scriptPath,
+	))
 }
