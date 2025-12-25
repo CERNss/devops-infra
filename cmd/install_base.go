@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"devops-infra/internal/infra/base/docker"
+	"devops-infra/internal/infra/install_operation/base/docker"
 	"devops-infra/internal/infra/orchestration"
 	"encoding/hex"
 	"fmt"

@@ -10,7 +10,7 @@ var execOpts executor.Options
 
 var rootCmd = &cobra.Command{
 	Use:   "devops-infra",
-	Short: "Infrastructure installer",
+	Short: "Infrastructure base",
 }
 
 func Execute() error {

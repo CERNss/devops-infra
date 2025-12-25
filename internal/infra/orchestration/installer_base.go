@@ -2,18 +2,18 @@ package orchestration
 
 import (
 	"context"
-	"devops-infra/internal/infra/base"
-	"devops-infra/internal/infra/base/containerd"
-	"devops-infra/internal/infra/base/docker"
-	"devops-infra/internal/infra/base/kernel"
-	"devops-infra/internal/infra/base/mirror"
-	"devops-infra/internal/infra/base/tools"
-	executor2 "devops-infra/internal/infra/executor"
+	"devops-infra/internal/infra/executor"
+	"devops-infra/internal/infra/install_operation/base"
+	"devops-infra/internal/infra/install_operation/base/containerd"
+	"devops-infra/internal/infra/install_operation/base/docker"
+	"devops-infra/internal/infra/install_operation/base/kernel"
+	"devops-infra/internal/infra/install_operation/base/mirror"
+	"devops-infra/internal/infra/install_operation/base/tools"
 	"devops-infra/internal/infra/os"
 )
 
 type InstallBaseOptions struct {
-	ExecOpts              executor2.Options
+	ExecOpts              executor.Options
 	EnableMirror          bool
 	LinuxMirrorSource     string
 	DockerInstallMode     docker.InstallMode
@@ -35,7 +35,7 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	}
 
 	// 2. Create executor (local)
-	exec := executor2.NewLocal(opts.ExecOpts)
+	exec := executor.NewLocal(opts.ExecOpts)
 
 	// 3. Create OS driver
 	driver, err := os.NewDriver(osInfo, exec)
@@ -48,7 +48,7 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 		mode = docker.InstallModeOfficial
 	}
 
-	// 4. Build base installer
+	// 4. Build base base
 	components := []base.Component{}
 	if !opts.SkipKernel {
 		components = append(components, kernel.New(driver))
