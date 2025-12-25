@@ -343,7 +343,7 @@ var dockerRegistryCategoryDomains = map[SystemCategory]map[string]struct{}{
 
 func ResolveSystem(input string) (string, bool) {
 	category, value := splitCategoryInput(input)
-	resolved, ok := resolveWith(systemDomains, value)
+	resolved, ok := resolve(KindSystem, value)
 	if !ok {
 		return "", false
 	}
@@ -362,7 +362,7 @@ func ResolveSystem(input string) (string, bool) {
 
 func ResolveDockerCE(input string) (string, bool) {
 	category, value := splitCategoryInput(input)
-	resolved, ok := resolveWith(dockerCEDomains, value)
+	resolved, ok := resolve(KindDockerCE, value)
 	if !ok {
 		return "", false
 	}
@@ -381,7 +381,7 @@ func ResolveDockerCE(input string) (string, bool) {
 
 func ResolveDockerRegistry(input string) (string, bool) {
 	category, value := splitCategoryInput(input)
-	resolved, ok := resolveWith(dockerRegistryDomains, value)
+	resolved, ok := resolve(KindDockerRegistry, value)
 	if !ok {
 		return "", false
 	}
@@ -398,7 +398,7 @@ func ResolveDockerRegistry(input string) (string, bool) {
 	return resolved, true
 }
 
-func resolveWith(domains map[string]string, input string) (string, bool) {
+func resolve(kind Kind, input string) (string, bool) {
 	value := normalize(input)
 	if value == "" {
 		return "", false
@@ -406,10 +406,20 @@ func resolveWith(domains map[string]string, input string) (string, bool) {
 	if looksLikeAddress(value) {
 		return stripProtocol(value), true
 	}
-
 	key := resolveKey(value)
-	domain, ok := domains[key]
-	return domain, ok
+	switch kind {
+	case KindSystem:
+		domain, ok := systemDomains[key]
+		return domain, ok
+	case KindDockerCE:
+		domain, ok := dockerCEDomains[key]
+		return domain, ok
+	case KindDockerRegistry:
+		domain, ok := dockerRegistryDomains[key]
+		return domain, ok
+	default:
+		return "", false
+	}
 }
 
 func resolveKey(input string) string {

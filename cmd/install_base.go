@@ -56,14 +56,14 @@ var installBaseCmd = &cobra.Command{
 
 		cleanRegistryMirrors := make([]string, 0, len(dockerRegistryMirrors))
 		seenRegistryMirrors := make(map[string]struct{})
-		for _, mirror := range dockerRegistryMirrors {
-			mirror = strings.TrimSpace(mirror)
-			if mirror == "" {
+		for _, registryMirror := range dockerRegistryMirrors {
+			registryMirror = strings.TrimSpace(registryMirror)
+			if registryMirror == "" {
 				continue
 			}
-			resolved, ok := mirror.ResolveDockerRegistry(mirror)
+			resolved, ok := mirror.ResolveDockerRegistry(registryMirror)
 			if !ok {
-				return fmt.Errorf("invalid docker registry mirror: %s", mirror)
+				return fmt.Errorf("invalid docker registry mirror: %s", registryMirror)
 			}
 			if _, ok := seenRegistryMirrors[resolved]; ok {
 				continue
