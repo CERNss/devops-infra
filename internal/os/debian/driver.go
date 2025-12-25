@@ -66,3 +66,7 @@ func (d *Driver) Sysctl(settings map[string]string) error {
 	}
 	return d.exec.Run("sysctl --system")
 }
+
+func (d *Driver) SwitchMirror() error {
+	return d.exec.Run("bash scripts/mirror/main.sh")
+}

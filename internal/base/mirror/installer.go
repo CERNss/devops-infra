@@ -27,6 +27,6 @@ func (m *Installer) Install(ctx context.Context) error {
 	}
 
 	return m.os.Exec().Run(
-		"bash <(curl -sSL https://linuxmirrors.cn/main.sh)",
+		"bash scripts/mirror/main.sh",
 	)
 }
