@@ -2,10 +2,10 @@ package mirror
 
 import (
 	"context"
+	osdriver "devops-infra/internal/infra/os"
 	"fmt"
 	"strings"
 
-	osdriver "devops-infra/internal/os"
 	"devops-infra/internal/utils/path"
 )
 

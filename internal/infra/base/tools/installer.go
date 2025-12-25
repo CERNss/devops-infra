@@ -2,9 +2,8 @@ package tools
 
 import (
 	"context"
+	osdriver "devops-infra/internal/infra/os"
 	"strings"
-
-	osdriver "devops-infra/internal/os"
 )
 
 type Installer struct {

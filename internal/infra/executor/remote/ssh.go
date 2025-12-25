@@ -2,17 +2,16 @@ package remote
 
 import (
 	"bytes"
+	executor2 "devops-infra/internal/infra/executor"
 	"fmt"
 	"os"
 
 	"golang.org/x/crypto/ssh"
-
-	"devops-infra/internal/executor"
 )
 
 type SSHExecutor struct {
 	client *ssh.Client
-	opts   executor.Options
+	opts   executor2.Options
 }
 
 // Run / RunWithOutput 是对外接口
@@ -27,7 +26,7 @@ func (s *SSHExecutor) RunWithOutput(cmd string) (string, error) {
 
 // run 是 SSHExecutor 的私有方法
 func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
-	final := executor.Prepare(cmd, s.opts)
+	final := executor2.Prepare(cmd, s.opts)
 
 	if s.opts.Verbose || s.opts.DryRun {
 		fmt.Printf("[ssh %s] %s\n", s.client.RemoteAddr(), final)

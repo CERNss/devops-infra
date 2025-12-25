@@ -2,10 +2,11 @@ package containerd
 
 import (
 	"context"
+	osdriver "devops-infra/internal/infra/os"
 	"fmt"
 	"strings"
 
-	osdriver "devops-infra/internal/os"
+	"devops-infra/internal/constant"
 )
 
 type Options struct {
@@ -14,13 +15,10 @@ type Options struct {
 	Checksum string
 }
 
-const (
-	defaultVersion = "1.7.28"
-	defaultArch    = "amd64"
-)
+const defaultArch = "amd64"
 
 type Installer struct {
-	os osdriver.Driver
+	os   osdriver.Driver
 	opts Options
 }
 
@@ -113,7 +111,7 @@ curl -sSL https://raw.githubusercontent.com/containerd/containerd/main/container
 func (c *Installer) resolveOptions() (string, string) {
 	version := strings.TrimSpace(c.opts.Version)
 	if version == "" {
-		version = defaultVersion
+		version = constant.DefaultContainerdVersion
 	}
 
 	arch := strings.TrimSpace(c.opts.Arch)

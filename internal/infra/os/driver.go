@@ -1,6 +1,8 @@
 package os
 
-import "devops-infra/internal/executor"
+import (
+	"devops-infra/internal/infra/executor"
+)
 
 type Driver interface {
 	Name() string

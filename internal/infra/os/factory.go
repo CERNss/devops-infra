@@ -1,11 +1,10 @@
 package os
 
 import (
-	"devops-infra/internal/executor"
+	"devops-infra/internal/infra/executor"
+	"devops-infra/internal/infra/os/debian"
+	"devops-infra/internal/infra/os/rhel"
 	"fmt"
-
-	"devops-infra/internal/os/debian"
-	"devops-infra/internal/os/rhel"
 )
 
 func NewDriver(info *OSInfo, exec executor.Executor) (Driver, error) {

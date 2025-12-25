@@ -2,10 +2,11 @@ package docker
 
 import (
 	"context"
+	osdriver "devops-infra/internal/infra/os"
 	"fmt"
 	"strings"
 
-	osdriver "devops-infra/internal/os"
+	"devops-infra/internal/constant"
 	"devops-infra/internal/utils/path"
 )
 
@@ -17,9 +18,8 @@ const (
 )
 
 const (
-	defaultNerdctlVersion = "1.7.7"
-	defaultRuncVersion    = "1.1.13"
-	defaultCNIVersion     = "1.5.1"
+	defaultRuncVersion = "1.1.13"
+	defaultCNIVersion  = "1.5.1"
 )
 
 type Installer struct {
@@ -27,12 +27,14 @@ type Installer struct {
 	mode            InstallMode
 	source          string
 	registryMirrors []string
+	engineVersion   string
 }
 
 type Options struct {
 	Mode            InstallMode
 	Source          string
 	RegistryMirrors []string
+	EngineVersion   string
 }
 
 func New(os osdriver.Driver, opts Options) *Installer {
@@ -41,6 +43,7 @@ func New(os osdriver.Driver, opts Options) *Installer {
 		mode:            opts.Mode,
 		source:          strings.TrimSpace(opts.Source),
 		registryMirrors: opts.RegistryMirrors,
+		engineVersion:   strings.TrimSpace(opts.EngineVersion),
 	}
 }
 
@@ -82,11 +85,18 @@ func (d *Installer) Install(ctx context.Context) error {
 			return err
 		}
 		cmd := fmt.Sprintf("bash %q", scriptPath)
+		engineVersion := strings.TrimSpace(d.engineVersion)
+		if engineVersion == "" {
+			engineVersion = constant.DefaultDockerEngineVersion
+		}
 		if d.source != "" {
 			cmd += fmt.Sprintf(" --source %q", d.source)
 		}
 		if len(d.registryMirrors) > 0 {
 			cmd += fmt.Sprintf(" --source-registry %q", strings.Join(d.registryMirrors, ","))
+		}
+		if engineVersion != "" {
+			cmd += fmt.Sprintf(" --designated-version %q", engineVersion)
 		}
 		if err := exec.Run(cmd); err != nil {
 			return err
@@ -116,7 +126,7 @@ VERSION=%s
 ARCH=amd64
 curl -L https://github.com/containerd/nerdctl/releases/download/v${VERSION}/nerdctl-${VERSION}-linux-${ARCH}.tar.gz \
  | tar -C /usr/local/bin -xz
-`, defaultNerdctlVersion)); err != nil {
+`, constant.DefaultNerdctlVersion)); err != nil {
 			return err
 		}
 	}

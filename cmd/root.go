@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"devops-infra/internal/executor"
+	"devops-infra/internal/infra/executor"
 
 	"github.com/spf13/cobra"
 )

@@ -1,6 +1,8 @@
 package orchestration
 
-import "devops-infra/internal/executor"
+import (
+	"devops-infra/internal/infra/executor"
+)
 
 type Node struct {
 	Name string

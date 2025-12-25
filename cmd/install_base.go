@@ -1,14 +1,15 @@
 package cmd
 
 import (
-	"context"
+	"devops-infra/internal/infra/base/docker"
+	"devops-infra/internal/infra/orchestration"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"devops-infra/internal/base/docker"
-	"devops-infra/internal/orchestration"
+	"devops-infra/internal/constant"
 	"devops-infra/internal/utils/mirror"
 )
 
@@ -18,6 +19,7 @@ var (
 	dockerInstallMode     string
 	dockerMirrorSource    string
 	dockerRegistryMirrors []string
+	dockerEngineVersion   string
 	containerdVersion     string
 	containerdArch        string
 	containerdChecksum    string
@@ -29,6 +31,7 @@ var installBaseCmd = &cobra.Command{
 	Use:   "base",
 	Short: "Install base infrastructure (kernel, tools, docker, containerd)",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		dockerInstallMode = strings.ToLower(strings.TrimSpace(dockerInstallMode))
 		switch dockerInstallMode {
 		case string(docker.InstallModeOfficial), string(docker.InstallModeNerdctl):
 		default:
@@ -46,6 +49,9 @@ var installBaseCmd = &cobra.Command{
 		}
 
 		dockerMirrorSource = strings.TrimSpace(dockerMirrorSource)
+		if dockerInstallMode == string(docker.InstallModeNerdctl) && dockerMirrorSource != "" {
+			return fmt.Errorf("docker-source is not supported when docker-install-mode=nerdctl")
+		}
 		if dockerMirrorSource != "" {
 			resolved, ok := mirror.ResolveDockerCE(dockerMirrorSource)
 			if !ok {
@@ -61,6 +67,9 @@ var installBaseCmd = &cobra.Command{
 			if registryMirror == "" {
 				continue
 			}
+			if dockerInstallMode == string(docker.InstallModeNerdctl) {
+				return fmt.Errorf("docker-registry-mirror is not supported when docker-install-mode=nerdctl")
+			}
 			resolved, ok := mirror.ResolveDockerRegistry(registryMirror)
 			if !ok {
 				return fmt.Errorf("invalid docker registry mirror: %s", registryMirror)
@@ -72,12 +81,25 @@ var installBaseCmd = &cobra.Command{
 			cleanRegistryMirrors = append(cleanRegistryMirrors, resolved)
 		}
 
+		dockerEngineVersion = strings.TrimSpace(dockerEngineVersion)
+		if dockerInstallMode == string(docker.InstallModeNerdctl) && dockerEngineVersion != "" {
+			return fmt.Errorf("docker-version is not supported when docker-install-mode=nerdctl")
+		}
+
 		containerdVersion = strings.TrimSpace(containerdVersion)
 		containerdArch = strings.TrimSpace(containerdArch)
 		containerdChecksum = strings.TrimSpace(containerdChecksum)
+		if containerdChecksum != "" {
+			if len(containerdChecksum) != 64 {
+				return fmt.Errorf("invalid containerd checksum length: %d", len(containerdChecksum))
+			}
+			if _, err := hex.DecodeString(containerdChecksum); err != nil {
+				return fmt.Errorf("invalid containerd checksum: %w", err)
+			}
+		}
 
 		return orchestration.InstallBase(
-			context.Background(),
+			cmd.Context(),
 			orchestration.InstallBaseOptions{
 				ExecOpts:              execOpts,
 				EnableMirror:          enableMirror,
@@ -85,6 +107,7 @@ var installBaseCmd = &cobra.Command{
 				DockerInstallMode:     docker.InstallMode(dockerInstallMode),
 				DockerMirrorSource:    dockerMirrorSource,
 				DockerRegistryMirrors: cleanRegistryMirrors,
+				DockerEngineVersion:   dockerEngineVersion,
 				ContainerdVersion:     containerdVersion,
 				ContainerdArch:        containerdArch,
 				ContainerdChecksum:    containerdChecksum,
@@ -126,6 +149,13 @@ func init() {
 		"docker CE mirror source (domain or alias)",
 	)
 
+	installBaseCmd.Flags().StringVar(
+		&dockerEngineVersion,
+		"docker-version",
+		"",
+		fmt.Sprintf("docker engine version (default: %s)", constant.DefaultDockerEngineVersion),
+	)
+
 	installBaseCmd.Flags().StringSliceVar(
 		&dockerRegistryMirrors,
 		"docker-registry-mirror",
@@ -137,7 +167,7 @@ func init() {
 		&containerdVersion,
 		"containerd-version",
 		"",
-		"containerd version (default: 1.7.28)",
+		fmt.Sprintf("containerd version (default: %s)", constant.DefaultContainerdVersion),
 	)
 
 	installBaseCmd.Flags().StringVar(

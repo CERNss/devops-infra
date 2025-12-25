@@ -1,10 +1,10 @@
 package rhel
 
 import (
+	"devops-infra/internal/infra/executor"
 	"fmt"
 	"strings"
 
-	"devops-infra/internal/executor"
 	"devops-infra/internal/utils/path"
 )
 

@@ -2,24 +2,24 @@ package orchestration
 
 import (
 	"context"
-
-	"devops-infra/internal/base"
-	"devops-infra/internal/base/containerd"
-	"devops-infra/internal/base/docker"
-	"devops-infra/internal/base/kernel"
-	"devops-infra/internal/base/mirror"
-	"devops-infra/internal/base/tools"
-	"devops-infra/internal/executor"
-	osdriver "devops-infra/internal/os"
+	"devops-infra/internal/infra/base"
+	"devops-infra/internal/infra/base/containerd"
+	"devops-infra/internal/infra/base/docker"
+	"devops-infra/internal/infra/base/kernel"
+	"devops-infra/internal/infra/base/mirror"
+	"devops-infra/internal/infra/base/tools"
+	executor2 "devops-infra/internal/infra/executor"
+	"devops-infra/internal/infra/os"
 )
 
 type InstallBaseOptions struct {
-	ExecOpts              executor.Options
+	ExecOpts              executor2.Options
 	EnableMirror          bool
 	LinuxMirrorSource     string
 	DockerInstallMode     docker.InstallMode
 	DockerMirrorSource    string
 	DockerRegistryMirrors []string
+	DockerEngineVersion   string
 	ContainerdVersion     string
 	ContainerdArch        string
 	ContainerdChecksum    string
@@ -29,16 +29,16 @@ type InstallBaseOptions struct {
 
 func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	// 1. Detect OS
-	osInfo, err := osdriver.Detect()
+	osInfo, err := os.Detect()
 	if err != nil {
 		return err
 	}
 
 	// 2. Create executor (local)
-	exec := executor.NewLocal(opts.ExecOpts)
+	exec := executor2.NewLocal(opts.ExecOpts)
 
 	// 3. Create OS driver
-	driver, err := osdriver.NewDriver(osInfo, exec)
+	driver, err := os.NewDriver(osInfo, exec)
 	if err != nil {
 		return err
 	}
@@ -74,6 +74,7 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 				Mode:            mode,
 				Source:          opts.DockerMirrorSource,
 				RegistryMirrors: opts.DockerRegistryMirrors,
+				EngineVersion:   opts.DockerEngineVersion,
 			}),
 			containerdInstaller,
 		)
@@ -84,6 +85,7 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 				Mode:            mode,
 				Source:          opts.DockerMirrorSource,
 				RegistryMirrors: opts.DockerRegistryMirrors,
+				EngineVersion:   opts.DockerEngineVersion,
 			}),
 			containerdInstaller,
 		)
