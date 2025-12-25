@@ -2,8 +2,6 @@ package docker
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -27,11 +25,23 @@ const (
 type Installer struct {
 	os              osdriver.Driver
 	mode            InstallMode
+	source          string
 	registryMirrors []string
 }
 
-func New(os osdriver.Driver, mode InstallMode, registryMirrors []string) *Installer {
-	return &Installer{os: os, mode: mode, registryMirrors: registryMirrors}
+type Options struct {
+	Mode            InstallMode
+	Source          string
+	RegistryMirrors []string
+}
+
+func New(os osdriver.Driver, opts Options) *Installer {
+	return &Installer{
+		os:              os,
+		mode:            opts.Mode,
+		source:          strings.TrimSpace(opts.Source),
+		registryMirrors: opts.RegistryMirrors,
+	}
 }
 
 func (d *Installer) Name() string { return "docker" }
@@ -71,11 +81,14 @@ func (d *Installer) Install(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if err := exec.Run(fmt.Sprintf("bash %q", scriptPath)); err != nil {
-			return err
+		cmd := fmt.Sprintf("bash %q", scriptPath)
+		if d.source != "" {
+			cmd += fmt.Sprintf(" --source %q", d.source)
 		}
-
-		if err := d.configureRegistryMirrors(); err != nil {
+		if len(d.registryMirrors) > 0 {
+			cmd += fmt.Sprintf(" --source-registry %q", strings.Join(d.registryMirrors, ","))
+		}
+		if err := exec.Run(cmd); err != nil {
 			return err
 		}
 
@@ -91,27 +104,6 @@ func (d *Installer) Install(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unsupported docker install mode: %s", d.mode)
 	}
-}
-
-func (d *Installer) configureRegistryMirrors() error {
-	if len(d.registryMirrors) == 0 {
-		return nil
-	}
-
-	data, err := json.MarshalIndent(map[string][]string{
-		"registry-mirrors": d.registryMirrors,
-	}, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	encoded := base64.StdEncoding.EncodeToString(data)
-	cmd := fmt.Sprintf(
-		"mkdir -p /etc/docker && printf '%%s' '%s' | base64 -d > /etc/docker/daemon.json",
-		encoded,
-	)
-
-	return d.os.Exec().Run(cmd)
 }
 
 func (d *Installer) ensureNerdctl() error {

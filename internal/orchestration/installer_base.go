@@ -16,7 +16,9 @@ import (
 type InstallBaseOptions struct {
 	ExecOpts              executor.Options
 	EnableMirror          bool
+	LinuxMirrorSource     string
 	DockerInstallMode     docker.InstallMode
+	DockerMirrorSource    string
 	DockerRegistryMirrors []string
 	ContainerdVersion     string
 	ContainerdArch        string
@@ -51,7 +53,10 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	if !opts.SkipKernel {
 		components = append(components, kernel.New(driver))
 	}
-	components = append(components, mirror.New(driver, opts.EnableMirror))
+	components = append(components, mirror.New(driver, mirror.Options{
+		Enable: opts.EnableMirror,
+		Source: opts.LinuxMirrorSource,
+	}))
 	if !opts.SkipTools {
 		components = append(components, tools.New(driver))
 	}
@@ -65,13 +70,21 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	if mode == docker.InstallModeNerdctl {
 		components = append(
 			components,
-			docker.New(driver, mode, opts.DockerRegistryMirrors),
+			docker.New(driver, docker.Options{
+				Mode:            mode,
+				Source:          opts.DockerMirrorSource,
+				RegistryMirrors: opts.DockerRegistryMirrors,
+			}),
 			containerdInstaller,
 		)
 	} else {
 		components = append(
 			components,
-			docker.New(driver, mode, opts.DockerRegistryMirrors),
+			docker.New(driver, docker.Options{
+				Mode:            mode,
+				Source:          opts.DockerMirrorSource,
+				RegistryMirrors: opts.DockerRegistryMirrors,
+			}),
 			containerdInstaller,
 		)
 	}

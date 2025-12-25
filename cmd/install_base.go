@@ -9,11 +9,14 @@ import (
 
 	"devops-infra/internal/base/docker"
 	"devops-infra/internal/orchestration"
+	"devops-infra/internal/utils/mirror"
 )
 
 var (
 	enableMirror          bool
+	linuxMirrorSource     string
 	dockerInstallMode     string
+	dockerMirrorSource    string
 	dockerRegistryMirrors []string
 	containerdVersion     string
 	containerdArch        string
@@ -32,13 +35,41 @@ var installBaseCmd = &cobra.Command{
 			return fmt.Errorf("invalid docker install mode: %s", dockerInstallMode)
 		}
 
+		linuxMirrorSource = strings.TrimSpace(linuxMirrorSource)
+		if linuxMirrorSource != "" {
+			resolved, ok := mirror.ResolveSystem(linuxMirrorSource)
+			if !ok {
+				return fmt.Errorf("invalid mirror source: %s", linuxMirrorSource)
+			}
+			linuxMirrorSource = resolved
+			enableMirror = true
+		}
+
+		dockerMirrorSource = strings.TrimSpace(dockerMirrorSource)
+		if dockerMirrorSource != "" {
+			resolved, ok := mirror.ResolveDockerCE(dockerMirrorSource)
+			if !ok {
+				return fmt.Errorf("invalid docker source: %s", dockerMirrorSource)
+			}
+			dockerMirrorSource = resolved
+		}
+
 		cleanRegistryMirrors := make([]string, 0, len(dockerRegistryMirrors))
+		seenRegistryMirrors := make(map[string]struct{})
 		for _, mirror := range dockerRegistryMirrors {
 			mirror = strings.TrimSpace(mirror)
 			if mirror == "" {
 				continue
 			}
-			cleanRegistryMirrors = append(cleanRegistryMirrors, mirror)
+			resolved, ok := mirror.ResolveDockerRegistry(mirror)
+			if !ok {
+				return fmt.Errorf("invalid docker registry mirror: %s", mirror)
+			}
+			if _, ok := seenRegistryMirrors[resolved]; ok {
+				continue
+			}
+			seenRegistryMirrors[resolved] = struct{}{}
+			cleanRegistryMirrors = append(cleanRegistryMirrors, resolved)
 		}
 
 		containerdVersion = strings.TrimSpace(containerdVersion)
@@ -50,7 +81,9 @@ var installBaseCmd = &cobra.Command{
 			orchestration.InstallBaseOptions{
 				ExecOpts:              execOpts,
 				EnableMirror:          enableMirror,
+				LinuxMirrorSource:     linuxMirrorSource,
 				DockerInstallMode:     docker.InstallMode(dockerInstallMode),
+				DockerMirrorSource:    dockerMirrorSource,
 				DockerRegistryMirrors: cleanRegistryMirrors,
 				ContainerdVersion:     containerdVersion,
 				ContainerdArch:        containerdArch,
@@ -73,17 +106,31 @@ func init() {
 	)
 
 	installBaseCmd.Flags().StringVar(
+		&linuxMirrorSource,
+		"mirror-source",
+		"",
+		"system mirror source (domain or alias)",
+	)
+
+	installBaseCmd.Flags().StringVar(
 		&dockerInstallMode,
 		"docker-install-mode",
 		string(docker.InstallModeOfficial),
 		"docker install mode: docker|nerdctl",
 	)
 
+	installBaseCmd.Flags().StringVar(
+		&dockerMirrorSource,
+		"docker-source",
+		"",
+		"docker CE mirror source (domain or alias)",
+	)
+
 	installBaseCmd.Flags().StringSliceVar(
 		&dockerRegistryMirrors,
 		"docker-registry-mirror",
 		nil,
-		"docker registry mirror (comma-separated)",
+		"docker registry mirror (comma-separated, domain or alias)",
 	)
 
 	installBaseCmd.Flags().StringVar(
