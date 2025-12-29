@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"devops-infra/internal/constant"
-	"devops-infra/internal/infra/install_operation/base/docker"
+	"devops-infra/internal/infra/install/base/docker"
 	"devops-infra/internal/infra/orchestration/flow"
 	"devops-infra/internal/utils/mirror"
 )

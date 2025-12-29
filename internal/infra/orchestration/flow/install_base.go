@@ -7,12 +7,12 @@ import (
 	"devops-infra/internal/infra/executor"
 	"devops-infra/internal/infra/orchestration/execfactory"
 	"devops-infra/internal/infra/orchestration/topology"
-	"devops-infra/internal/infra/install_operation/base"
-	"devops-infra/internal/infra/install_operation/base/containerd"
-	"devops-infra/internal/infra/install_operation/base/docker"
-	"devops-infra/internal/infra/install_operation/base/kernel"
-	"devops-infra/internal/infra/install_operation/base/mirror"
-	"devops-infra/internal/infra/install_operation/base/tools"
+	"devops-infra/internal/infra/install/base"
+	"devops-infra/internal/infra/install/base/containerd"
+	"devops-infra/internal/infra/install/base/docker"
+	"devops-infra/internal/infra/install/base/kernel"
+	"devops-infra/internal/infra/install/base/mirror"
+	"devops-infra/internal/infra/install/base/tools"
 	"devops-infra/internal/infra/os"
 )
 
