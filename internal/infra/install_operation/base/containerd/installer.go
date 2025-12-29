@@ -2,11 +2,12 @@ package containerd
 
 import (
 	"context"
-	osdriver "devops-infra/internal/infra/os"
 	"fmt"
 	"strings"
 
 	"devops-infra/internal/constant"
+	"devops-infra/internal/infra/executor"
+	osdriver "devops-infra/internal/infra/os"
 )
 
 type Options struct {
@@ -29,8 +30,12 @@ func New(os osdriver.Driver, opts Options) *Installer {
 func (c *Installer) Name() string { return "containerd" }
 
 func (c *Installer) IsInstalled(ctx context.Context) bool {
+	exec := c.os.Exec()
+	if executor.IsDryRun(exec) {
+		return false
+	}
 	version, _ := c.resolveOptions()
-	output, err := c.os.Exec().RunWithOutput("containerd --version")
+	output, err := exec.RunWithOutput("containerd --version")
 	if err != nil {
 		return false
 	}
@@ -56,7 +61,7 @@ curl -L -o /tmp/containerd.tar.gz https://github.com/containerd/containerd/relea
 		return err
 	}
 
-	if checksum != "" {
+	if checksum != "" && !executor.IsDryRun(exec) {
 		sumOut, err := exec.RunWithOutput("sha256sum /tmp/containerd.tar.gz")
 		if err != nil {
 			return err

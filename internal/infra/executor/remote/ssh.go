@@ -14,6 +14,10 @@ type SSHExecutor struct {
 	opts   executor2.Options
 }
 
+func (s *SSHExecutor) DryRun() bool {
+	return s.opts.DryRun
+}
+
 // Run / RunWithOutput 是对外接口
 func (s *SSHExecutor) Run(cmd string) error {
 	_, err := s.run(cmd, false)

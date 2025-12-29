@@ -15,6 +15,10 @@ func NewLocal(opts Options) *LocalExecutor {
 	return &LocalExecutor{opts: opts}
 }
 
+func (e *LocalExecutor) DryRun() bool {
+	return e.opts.DryRun
+}
+
 func (e *LocalExecutor) Run(cmd string) error {
 	_, err := e.run(cmd, false)
 	return err

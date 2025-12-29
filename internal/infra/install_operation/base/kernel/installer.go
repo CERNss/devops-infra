@@ -2,8 +2,10 @@ package kernel
 
 import (
 	"context"
-	osdriver "devops-infra/internal/infra/os"
 	"strings"
+
+	"devops-infra/internal/infra/executor"
+	osdriver "devops-infra/internal/infra/os"
 )
 
 type Installer struct {
@@ -18,6 +20,9 @@ func (k *Installer) Name() string { return "kernel" }
 
 func (k *Installer) IsInstalled(ctx context.Context) bool {
 	exec := k.os.Exec()
+	if executor.IsDryRun(exec) {
+		return false
+	}
 	output, err := exec.RunWithOutput("sysctl -n net.bridge.bridge-nf-call-iptables net.bridge.bridge-nf-call-ip6tables net.ipv4.ip_forward")
 	if err != nil {
 		return false

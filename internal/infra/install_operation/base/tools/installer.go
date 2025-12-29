@@ -2,8 +2,10 @@ package tools
 
 import (
 	"context"
-	osdriver "devops-infra/internal/infra/os"
 	"strings"
+
+	"devops-infra/internal/infra/executor"
+	osdriver "devops-infra/internal/infra/os"
 )
 
 type Installer struct {
@@ -18,6 +20,9 @@ func (t *Installer) Name() string { return "common-tools" }
 
 func (t *Installer) IsInstalled(ctx context.Context) bool {
 	exec := t.os.Exec()
+	if executor.IsDryRun(exec) {
+		return false
+	}
 	checks := []string{"curl", "gpg", "tar", "ip"}
 	for _, binary := range checks {
 		output, err := exec.RunWithOutput("command -v " + binary)
