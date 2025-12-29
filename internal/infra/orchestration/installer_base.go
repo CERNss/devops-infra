@@ -10,10 +10,13 @@ import (
 	"devops-infra/internal/infra/install_operation/base/mirror"
 	"devops-infra/internal/infra/install_operation/base/tools"
 	"devops-infra/internal/infra/os"
+	"fmt"
 )
 
 type InstallBaseOptions struct {
 	ExecOpts              executor.Options
+	Topology              *Topology
+	ExecutorFactory       ExecutorFactory
 	EnableMirror          bool
 	LinuxMirrorSource     string
 	DockerInstallMode     docker.InstallMode
@@ -34,8 +37,30 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 		return err
 	}
 
-	// 2. Create executor (local)
-	exec := executor.NewLocal(opts.ExecOpts)
+	topology := opts.Topology
+	if topology == nil {
+		defaultTopology := NewSingleNodeTopology(opts.ExecOpts)
+		topology = &defaultTopology
+	}
+	if len(topology.Nodes) != 1 {
+		return fmt.Errorf("only single-node topology is supported for now")
+	}
+
+	node := topology.Nodes[0]
+	if node.ExecOpts == nil {
+		node.ExecOpts = &opts.ExecOpts
+	}
+
+	factory := opts.ExecutorFactory
+	if factory == nil {
+		factory = DefaultExecutorFactory{}
+	}
+
+	// 2. Create executor
+	exec, err := factory.Build(node)
+	if err != nil {
+		return err
+	}
 
 	// 3. Create OS driver
 	driver, err := os.NewDriver(osInfo, exec)
