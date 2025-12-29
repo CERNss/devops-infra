@@ -2,17 +2,27 @@ package executor
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"time"
 )
 
 type LocalExecutor struct {
-	opts Options
+	opts    Options
+	runtime Runtime
 }
 
 func NewLocal(opts Options) *LocalExecutor {
-	return &LocalExecutor{opts: opts}
+	return NewLocalWithRuntime(opts, DefaultRuntime())
+}
+
+func NewLocalWithRuntime(opts Options, runtime Runtime) *LocalExecutor {
+	runtime = normalizeRuntime(runtime)
+	return &LocalExecutor{opts: opts, runtime: runtime}
 }
 
 func (e *LocalExecutor) DryRun() bool {
@@ -36,22 +46,38 @@ func (e *LocalExecutor) run(cmd string, capture bool) (string, error) {
 	}
 
 	if e.opts.DryRun {
+		e.traceCommand(finalCmd, time.Now(), "", "", nil, true)
 		return "", nil
 	}
 
-	c := exec.Command("bash", "-c", finalCmd)
+	start := time.Now()
+	stdoutBuf := &bytes.Buffer{}
+	stderrBuf := &bytes.Buffer{}
+	combinedBuf := &bytes.Buffer{}
 
+	var stdoutWriter io.Writer
+	var stderrWriter io.Writer
 	if capture {
-		var buf bytes.Buffer
-		c.Stdout = &buf
-		c.Stderr = &buf
-		err := c.Run()
-		return buf.String(), err
+		stdoutWriter = io.MultiWriter(combinedBuf, stdoutBuf)
+		stderrWriter = io.MultiWriter(combinedBuf, stderrBuf)
+	} else {
+		stdoutWriter = io.MultiWriter(os.Stdout, combinedBuf, stdoutBuf)
+		stderrWriter = io.MultiWriter(os.Stderr, combinedBuf, stderrBuf)
 	}
 
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	return "", c.Run()
+	c := exec.CommandContext(e.runtime.Ctx, "bash", "-c", finalCmd)
+	c.Stdout = stdoutWriter
+	c.Stderr = stderrWriter
+
+	if capture {
+		err := c.Run()
+		e.traceCommand(finalCmd, start, stdoutBuf.String(), stderrBuf.String(), err, false)
+		return combinedBuf.String(), err
+	}
+
+	err := c.Run()
+	e.traceCommand(finalCmd, start, stdoutBuf.String(), stderrBuf.String(), err, false)
+	return "", err
 }
 
 func (e *LocalExecutor) prepare(cmd string) string {
@@ -59,4 +85,23 @@ func (e *LocalExecutor) prepare(cmd string) string {
 		return "sudo -E bash -c " + shellQuote(cmd)
 	}
 	return cmd
+}
+
+func (e *LocalExecutor) traceCommand(
+	command string,
+	start time.Time,
+	stdout string,
+	stderr string,
+	err error,
+	dryRun bool,
+) {
+	trace := e.runtime.Trace
+	if trace == nil {
+		return
+	}
+
+	end := time.Now()
+	timedOut := err != nil && errors.Is(err, context.DeadlineExceeded)
+	event := NewTraceEvent(command, start, end, stdout, stderr, err, dryRun, timedOut)
+	trace.OnCommand(event)
 }

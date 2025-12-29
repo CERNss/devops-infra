@@ -9,12 +9,12 @@ import (
 )
 
 type ExecutorFactory interface {
-	Build(node topology.Node) (executor.Executor, error)
+	Build(node topology.Node, runtime executor.Runtime) (executor.Executor, error)
 }
 
 type DefaultExecutorFactory struct{}
 
-func (DefaultExecutorFactory) Build(node topology.Node) (executor.Executor, error) {
+func (DefaultExecutorFactory) Build(node topology.Node, runtime executor.Runtime) (executor.Executor, error) {
 	opts := executor.Options{}
 	if node.ExecOpts != nil {
 		opts = *node.ExecOpts
@@ -22,12 +22,12 @@ func (DefaultExecutorFactory) Build(node topology.Node) (executor.Executor, erro
 
 	switch node.ExecutorType {
 	case topology.ExecutorLocal, "":
-		return executor.NewLocal(opts), nil
+		return executor.NewLocalWithRuntime(opts, runtime), nil
 	case topology.ExecutorSSH:
 		if node.SSH == nil {
 			return nil, fmt.Errorf("ssh config is required for node %q", node.Name)
 		}
-		return remote.NewSSHExecutor(*node.SSH, opts)
+		return remote.NewSSHExecutorWithRuntime(*node.SSH, opts, runtime)
 	default:
 		return nil, fmt.Errorf("unsupported executor type: %s", node.ExecutorType)
 	}
