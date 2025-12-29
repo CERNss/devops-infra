@@ -1,28 +1,29 @@
-package orchestration
+package execfactory
 
 import (
 	"fmt"
 
 	"devops-infra/internal/infra/executor"
 	"devops-infra/internal/infra/executor/remote"
+	"devops-infra/internal/infra/orchestration/topology"
 )
 
 type ExecutorFactory interface {
-	Build(node Node) (executor.Executor, error)
+	Build(node topology.Node) (executor.Executor, error)
 }
 
 type DefaultExecutorFactory struct{}
 
-func (DefaultExecutorFactory) Build(node Node) (executor.Executor, error) {
+func (DefaultExecutorFactory) Build(node topology.Node) (executor.Executor, error) {
 	opts := executor.Options{}
 	if node.ExecOpts != nil {
 		opts = *node.ExecOpts
 	}
 
 	switch node.ExecutorType {
-	case ExecutorLocal, "":
+	case topology.ExecutorLocal, "":
 		return executor.NewLocal(opts), nil
-	case ExecutorSSH:
+	case topology.ExecutorSSH:
 		if node.SSH == nil {
 			return nil, fmt.Errorf("ssh config is required for node %q", node.Name)
 		}

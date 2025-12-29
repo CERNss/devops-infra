@@ -1,4 +1,4 @@
-package orchestration
+package topology
 
 import "devops-infra/internal/infra/executor"
 

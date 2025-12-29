@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"devops-infra/internal/infra/install_operation/base/docker"
-	"devops-infra/internal/infra/orchestration"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -10,6 +8,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"devops-infra/internal/constant"
+	"devops-infra/internal/infra/install_operation/base/docker"
+	"devops-infra/internal/infra/orchestration/flow"
 	"devops-infra/internal/utils/mirror"
 )
 
@@ -98,9 +98,9 @@ var installBaseCmd = &cobra.Command{
 			}
 		}
 
-		return orchestration.InstallBase(
+		return flow.InstallBase(
 			cmd.Context(),
-			orchestration.InstallBaseOptions{
+			flow.InstallBaseOptions{
 				ExecOpts:              execOpts,
 				EnableMirror:          enableMirror,
 				LinuxMirrorSource:     linuxMirrorSource,

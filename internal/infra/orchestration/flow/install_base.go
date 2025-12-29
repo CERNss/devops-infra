@@ -1,8 +1,12 @@
-package orchestration
+package flow
 
 import (
 	"context"
+	"fmt"
+
 	"devops-infra/internal/infra/executor"
+	"devops-infra/internal/infra/orchestration/execfactory"
+	"devops-infra/internal/infra/orchestration/topology"
 	"devops-infra/internal/infra/install_operation/base"
 	"devops-infra/internal/infra/install_operation/base/containerd"
 	"devops-infra/internal/infra/install_operation/base/docker"
@@ -10,13 +14,12 @@ import (
 	"devops-infra/internal/infra/install_operation/base/mirror"
 	"devops-infra/internal/infra/install_operation/base/tools"
 	"devops-infra/internal/infra/os"
-	"fmt"
 )
 
 type InstallBaseOptions struct {
 	ExecOpts              executor.Options
-	Topology              *Topology
-	ExecutorFactory       ExecutorFactory
+	Topology              *topology.Topology
+	ExecutorFactory       execfactory.ExecutorFactory
 	EnableMirror          bool
 	LinuxMirrorSource     string
 	DockerInstallMode     docker.InstallMode
@@ -37,23 +40,23 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 		return err
 	}
 
-	topology := opts.Topology
-	if topology == nil {
-		defaultTopology := NewSingleNodeTopology(opts.ExecOpts)
-		topology = &defaultTopology
+	topo := opts.Topology
+	if topo == nil {
+		defaultTopology := topology.NewSingleNodeTopology(opts.ExecOpts)
+		topo = &defaultTopology
 	}
-	if len(topology.Nodes) != 1 {
+	if len(topo.Nodes) != 1 {
 		return fmt.Errorf("only single-node topology is supported for now")
 	}
 
-	node := topology.Nodes[0]
+	node := topo.Nodes[0]
 	if node.ExecOpts == nil {
 		node.ExecOpts = &opts.ExecOpts
 	}
 
 	factory := opts.ExecutorFactory
 	if factory == nil {
-		factory = DefaultExecutorFactory{}
+		factory = execfactory.DefaultExecutorFactory{}
 	}
 
 	// 2. Create executor
