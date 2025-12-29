@@ -52,7 +52,7 @@
 ```
 cmd/install_base.go
   ↓
-infra/orchestration.InstallBase(ctx, options)
+infra/orchestration/flow.InstallBase(ctx, options)
   ↓
 os.Detect → executor.NewLocal(execOpts) → os.NewDriver(osInfo, exec)
   ↓
