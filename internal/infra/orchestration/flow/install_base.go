@@ -25,6 +25,7 @@ type InstallBaseOptions struct {
 	ExecutorFactory       execfactory.ExecutorFactory
 	TraceSink             tracemw.TraceSink
 	OutputFactory         logmw.OutputSinkFactory
+	Logger                logmw.Logger
 	LogDir                string
 	EnableMirror          bool
 	LinuxMirrorSource     string
@@ -68,6 +69,10 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	trace := opts.TraceSink
 	if trace == nil {
 		trace = tracemw.DefaultTraceSink()
+	}
+	logger := opts.Logger
+	if logger == nil {
+		logger = logmw.DefaultLogger(opts.LogDir)
 	}
 	runtime := executor.NewRuntime(ctx, trace)
 	if opts.OutputFactory != nil {
@@ -141,8 +146,14 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 		)
 	}
 
-	installer := base.New(components...)
+	installer := base.New(components...).WithLogger(logger)
 
 	// 5. Run
-	return installer.Install(ctx)
+	logger.Info("install-base: start")
+	if err := installer.Install(ctx); err != nil {
+		logger.Error(fmt.Sprintf("install-base: failed: %v", err))
+		return err
+	}
+	logger.Info("install-base: done")
+	return nil
 }

@@ -8,6 +8,8 @@ const (
 	DefaultDockerEngineVersion = "27.5.1"
 	DefaultKnownHostsPath      = "~/.ssh/known_hosts"
 	DefaultSSHPort             = 22
+	DefaultLogDir              = "logs"
+	DefaultLogFile             = "logs/run.log"
 	DefaultTraceDir            = "logs/trace"
 	DefaultTraceFile           = "logs/trace/trace.jsonl"
 	DefaultCNIVersion          = "1.5.1"
