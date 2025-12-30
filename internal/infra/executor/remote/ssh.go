@@ -12,6 +12,8 @@ import (
 
 	"devops-infra/internal/constant"
 	"devops-infra/internal/infra/executor"
+	logmw "devops-infra/internal/infra/middleware/log"
+	tracemw "devops-infra/internal/infra/middleware/trace"
 	pathutil "devops-infra/internal/utils/path"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -101,30 +103,43 @@ func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
 	}
 
 	start := time.Now()
+	sink, err := s.runtime.Output.Open(logmw.RuntimeInfo{LogDir: s.runtime.LogDir}, final)
+	if err != nil {
+		sink = logmw.NoopOutputSink()
+	}
+	defer sink.Close()
+
 	session, err := s.client.NewSession()
 	if err != nil {
-		s.traceCommand(final, start, "", "", err, false)
+		s.traceCommand(final, start, sink.StdoutPath(), sink.StderrPath(), err, false)
 		return "", err
 	}
 	defer func(session *ssh.Session) {
 		_ = session.Close()
 	}(session)
 
-	stdoutBuf := &bytes.Buffer{}
-	stderrBuf := &bytes.Buffer{}
 	combinedBuf := &bytes.Buffer{}
+	stdoutWriter := sink.Stdout()
+	stderrWriter := sink.Stderr()
+	if stdoutWriter == nil {
+		stdoutWriter = io.Discard
+	}
+	if stderrWriter == nil {
+		stderrWriter = io.Discard
+	}
+
 	if capture {
-		session.Stdout = io.MultiWriter(combinedBuf, stdoutBuf)
-		session.Stderr = io.MultiWriter(combinedBuf, stderrBuf)
-		err := s.runWithContext(session, final)
-		s.traceCommand(final, start, stdoutBuf.String(), stderrBuf.String(), err, false)
+		session.Stdout = io.MultiWriter(combinedBuf, stdoutWriter)
+		session.Stderr = io.MultiWriter(combinedBuf, stderrWriter)
+		err = s.runWithContext(session, final)
+		s.traceCommand(final, start, sink.StdoutPath(), sink.StderrPath(), err, false)
 		return combinedBuf.String(), err
 	}
 
-	session.Stdout = io.MultiWriter(os.Stdout, combinedBuf, stdoutBuf)
-	session.Stderr = io.MultiWriter(os.Stderr, combinedBuf, stderrBuf)
+	session.Stdout = io.MultiWriter(os.Stdout, stdoutWriter)
+	session.Stderr = io.MultiWriter(os.Stderr, stderrWriter)
 	err = s.runWithContext(session, final)
-	s.traceCommand(final, start, stdoutBuf.String(), stderrBuf.String(), err, false)
+	s.traceCommand(final, start, sink.StdoutPath(), sink.StderrPath(), err, false)
 	return "", err
 }
 
@@ -196,8 +211,8 @@ func (s *SSHExecutor) runWithContext(session *ssh.Session, cmd string) error {
 func (s *SSHExecutor) traceCommand(
 	command string,
 	start time.Time,
-	stdout string,
-	stderr string,
+	stdoutPath string,
+	stderrPath string,
 	err error,
 	dryRun bool,
 ) {
@@ -208,6 +223,19 @@ func (s *SSHExecutor) traceCommand(
 
 	end := time.Now()
 	timedOut := err != nil && errors.Is(err, context.DeadlineExceeded)
-	event := executor.NewTraceEvent(command, s.runtime.NodeName, s.runtime.NodeAddr, start, end, stdout, stderr, err, dryRun, timedOut)
+	event := tracemw.NewTraceEvent(
+		command,
+		s.runtime.NodeName,
+		s.runtime.NodeAddr,
+		stdoutPath,
+		stderrPath,
+		start,
+		end,
+		"",
+		"",
+		err,
+		dryRun,
+		timedOut,
+	)
 	trace.OnCommand(event)
 }

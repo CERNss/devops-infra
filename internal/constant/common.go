@@ -7,5 +7,7 @@ const (
 	DefaultContainerdArch      = "amd64"
 	DefaultDockerEngineVersion = "27.5.1"
 	DefaultKnownHostsPath      = "~/.ssh/known_hosts"
-	DefaultSSHPort             = 22
+  DefaultSSHPort             = 22
+	DefaultTraceDir            = "logs/trace"
+	DefaultTraceFile           = "logs/trace/trace.jsonl"
 )
