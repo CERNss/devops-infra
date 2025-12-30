@@ -15,10 +15,25 @@ type ExecutorFactory interface {
 type DefaultExecutorFactory struct{}
 
 func (DefaultExecutorFactory) Build(node topology.Node, runtime executor.Runtime) (executor.Executor, error) {
+	runtime = executor.NormalizeRuntime(runtime)
 	opts := executor.Options{}
 	if node.ExecOpts != nil {
 		opts = *node.ExecOpts
 	}
+
+	addr := ""
+	if node.SSH != nil && node.SSH.Host != "" {
+		addr = node.SSH.Host
+	}
+	name := node.Name
+	if name == "" {
+		if addr != "" {
+			name = addr
+		} else {
+			name = "local"
+		}
+	}
+	runtime = executor.WithNode(runtime, name, addr)
 
 	switch node.ExecutorType {
 	case topology.ExecutorLocal, "":

@@ -10,8 +10,11 @@ import (
 	"os"
 	"time"
 
+	"devops-infra/internal/constant"
 	"devops-infra/internal/infra/executor"
+	pathutil "devops-infra/internal/utils/path"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 type SSHExecutor struct {
@@ -45,10 +48,15 @@ func NewSSHExecutorWithRuntime(cfg SSHConfig, opts executor.Options, runtime exe
 		port = 22
 	}
 
+	hostKeyCallback, err := hostKeyCallback(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	clientConfig := &ssh.ClientConfig{
 		User:            cfg.User,
 		Auth:            auths,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         10 * time.Second,
 	}
 
@@ -61,7 +69,7 @@ func NewSSHExecutorWithRuntime(cfg SSHConfig, opts executor.Options, runtime exe
 	return &SSHExecutor{
 		client:  client,
 		opts:    opts,
-		runtime: executor.NewRuntime(runtime.Ctx, runtime.Trace),
+		runtime: executor.NormalizeRuntime(runtime),
 	}, nil
 }
 
@@ -142,6 +150,25 @@ func sshAuthMethods(cfg SSHConfig) ([]ssh.AuthMethod, error) {
 	return methods, nil
 }
 
+func hostKeyCallback(cfg SSHConfig) (ssh.HostKeyCallback, error) {
+	if cfg.InsecureIgnoreHostKey {
+		return ssh.InsecureIgnoreHostKey(), nil
+	}
+
+	knownHostsPath := cfg.KnownHostsPath
+	if knownHostsPath == "" {
+		knownHostsPath = constant.DefaultKnownHostsPath
+	}
+	resolved, err := pathutil.ResolveUserPath(knownHostsPath)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(resolved); err != nil {
+		return nil, fmt.Errorf("known_hosts not found: %w", err)
+	}
+	return knownhosts.New(resolved)
+}
+
 func (s *SSHExecutor) runWithContext(session *ssh.Session, cmd string) error {
 	ctx := s.runtime.Ctx
 	if ctx == nil {
@@ -181,6 +208,6 @@ func (s *SSHExecutor) traceCommand(
 
 	end := time.Now()
 	timedOut := err != nil && errors.Is(err, context.DeadlineExceeded)
-	event := executor.NewTraceEvent(command, start, end, stdout, stderr, err, dryRun, timedOut)
+	event := executor.NewTraceEvent(command, s.runtime.NodeName, s.runtime.NodeAddr, start, end, stdout, stderr, err, dryRun, timedOut)
 	trace.OnCommand(event)
 }
