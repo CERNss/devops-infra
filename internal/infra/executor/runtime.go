@@ -5,6 +5,7 @@ import "context"
 type Runtime struct {
 	Ctx      context.Context
 	Trace    TraceSink
+	LogDir   string
 	NodeName string
 	NodeAddr string
 }
@@ -34,5 +35,10 @@ func normalizeRuntime(rt Runtime) Runtime {
 func WithNode(rt Runtime, name string, addr string) Runtime {
 	rt.NodeName = name
 	rt.NodeAddr = addr
+	return rt
+}
+
+func WithLogDir(rt Runtime, dir string) Runtime {
+	rt.LogDir = dir
 	return rt
 }
