@@ -8,6 +8,7 @@ import (
 	logmw "devops-infra/internal/infra/middleware/log"
 	tracemw "devops-infra/internal/infra/middleware/trace"
 	"devops-infra/internal/infra/install/base"
+	"devops-infra/internal/infra/install/base/cni"
 	"devops-infra/internal/infra/install/base/containerd"
 	"devops-infra/internal/infra/install/base/docker"
 	"devops-infra/internal/infra/install/base/kernel"
@@ -105,11 +106,15 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	if !opts.SkipTools {
 		components = append(components, tools.New(driver))
 	}
+	components = append(components, cni.New(driver, cni.Options{
+		Arch: opts.ContainerdArch,
+	}))
 
 	containerdInstaller := containerd.New(driver, containerd.Options{
-		Version:  opts.ContainerdVersion,
-		Arch:     opts.ContainerdArch,
-		Checksum: opts.ContainerdChecksum,
+		Version:          opts.ContainerdVersion,
+		Arch:             opts.ContainerdArch,
+		Checksum:         opts.ContainerdChecksum,
+		EnsureCNIConfig:  true,
 	})
 
 	if mode == docker.InstallModeNerdctl {

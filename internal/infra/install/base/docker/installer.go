@@ -20,7 +20,6 @@ const (
 
 const (
 	defaultRuncVersion = "1.1.13"
-	defaultCNIVersion  = "1.5.1"
 )
 
 type Installer struct {
@@ -155,7 +154,7 @@ ARCH=amd64
 mkdir -p /opt/cni/bin
 curl -L https://github.com/containernetworking/plugins/releases/download/v${VERSION}/cni-plugins-linux-${ARCH}-v${VERSION}.tgz \
  | tar -C /opt/cni/bin -xz
-`, defaultCNIVersion)); err != nil {
+`, constant.DefaultCNIVersion)); err != nil {
 			return err
 		}
 
@@ -194,7 +193,7 @@ ARCH=amd64
 mkdir -p /opt/cni/bin
 curl -L https://github.com/containernetworking/plugins/releases/download/v${VERSION}/cni-plugins-linux-${ARCH}-v${VERSION}.tgz \
  | tar -C /opt/cni/bin -xz
-`, defaultCNIVersion)); err != nil {
+`, constant.DefaultCNIVersion)); err != nil {
 			return err
 		}
 	}

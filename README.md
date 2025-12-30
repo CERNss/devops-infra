@@ -15,7 +15,7 @@
   - `--mirror-source`：指定系统镜像源（域名或别名，传入后自动启用 `--mirror`，支持 `国内-阿里云`、`教育网-清华`、`海外-xtom` 这样的分类写法）。
   - `--docker-install-mode=docker|nerdctl`：
     - `docker`：通过镜像脚本安装官方 Docker 并启动服务。
-    - `nerdctl`：自动安装 nerdctl/runc/cni，创建 `/usr/bin/docker` 软链接。
+    - `nerdctl`：自动安装 nerdctl/runc/cni，创建 `/usr/bin/docker` 软链接；当 `/etc/cni/net.d` 为空时自动生成 `99-nerdctl-bridge.conflist` 最小 CNI 配置。
   - `--docker-source`：指定 Docker CE 镜像源（域名或别名，仅 docker 模式生效，支持 `国内-阿里云`、`教育网-清华`、`海外-docker`）。
   - `--docker-registry-mirror`：配置 Docker registry 镜像（可多次传入或逗号分隔，仅 docker 模式生效，支持 `国内-1ms`、`海外-dockerhub`）。
   - `--docker-version`：指定 Docker Engine 版本（默认 27.5.1，仅 docker 模式生效）。
@@ -36,7 +36,7 @@
 ### 示例
 - `devops-infra install base`
 - `devops-infra install base --mirror --dry-run`
-- `devops-infra install base --mirror-source=阿里云`
+- `devops-infra install base --mirror-source=aliyun`
 - `devops-infra install base --docker-install-mode=nerdctl`
 - `devops-infra install base --docker-source=国内-阿里云 --docker-registry-mirror=国内-1ms,国内-dockerproxy`
 - `devops-infra install base --docker-version=27.5.1`

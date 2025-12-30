@@ -2,12 +2,15 @@ package constant
 
 const (
 	DefaultArch                = "amd64"
-	DefaultNerdctlVersion      = "2.1.0"
+	DefaultNerdctlVersion      = "2.1.1"
 	DefaultContainerdVersion   = "2.1.0"
 	DefaultContainerdArch      = "amd64"
 	DefaultDockerEngineVersion = "27.5.1"
 	DefaultKnownHostsPath      = "~/.ssh/known_hosts"
-  DefaultSSHPort             = 22
+	DefaultSSHPort             = 22
 	DefaultTraceDir            = "logs/trace"
 	DefaultTraceFile           = "logs/trace/trace.jsonl"
+	DefaultCNIVersion          = "1.5.1"
+	DefaultNerdctlCNISubnet    = "10.88.0.0/16"
+	DefaultNerdctlCNIRouteDst  = "0.0.0.0/0"
 )
