@@ -92,18 +92,26 @@ func (s *SSHExecutor) RunWithOutput(cmd string) (string, error) {
 // run 是 SSHExecutor 的私有方法
 func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
 	final := executor.Prepare(cmd, s.opts)
+	traceID := logmw.NewTraceID()
+	logCtx := logmw.WithTraceID(s.runtime.Ctx, traceID)
+	logger := s.runtime.Logger
+	if logger == nil {
+		logger = logmw.NoopLogger()
+	}
 
 	if s.opts.Verbose || s.opts.DryRun {
 		fmt.Printf("[ssh %s] %s\n", s.client.RemoteAddr(), final)
 	}
 
 	if s.opts.DryRun {
-		s.traceCommand(final, time.Now(), "", "", nil, true)
+		logger.Info(logCtx, fmt.Sprintf("exec dry-run: %s", final))
+		s.traceCommand(final, traceID, time.Now(), "", "", nil, true)
 		return "", nil
 	}
 
 	start := time.Now()
-	sink, err := s.runtime.Output.Open(logmw.RuntimeInfo{LogDir: s.runtime.LogDir}, final)
+	logger.Info(logCtx, fmt.Sprintf("exec start: %s", final))
+	sink, err := s.runtime.Output.Open(logmw.RuntimeInfo{LogDir: s.runtime.LogDir, TraceID: traceID}, final)
 	if err != nil {
 		sink = logmw.NoopOutputSink()
 	}
@@ -111,7 +119,8 @@ func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
 
 	session, err := s.client.NewSession()
 	if err != nil {
-		s.traceCommand(final, start, sink.StdoutPath(), sink.StderrPath(), err, false)
+		s.traceCommand(final, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
+		logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", final, err))
 		return "", err
 	}
 	defer func(session *ssh.Session) {
@@ -132,14 +141,24 @@ func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
 		session.Stdout = io.MultiWriter(combinedBuf, stdoutWriter)
 		session.Stderr = io.MultiWriter(combinedBuf, stderrWriter)
 		err = s.runWithContext(session, final)
-		s.traceCommand(final, start, sink.StdoutPath(), sink.StderrPath(), err, false)
+		s.traceCommand(final, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
+		if err != nil {
+			logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", final, err))
+		} else {
+			logger.Info(logCtx, fmt.Sprintf("exec done: %s", final))
+		}
 		return combinedBuf.String(), err
 	}
 
 	session.Stdout = io.MultiWriter(os.Stdout, stdoutWriter)
 	session.Stderr = io.MultiWriter(os.Stderr, stderrWriter)
 	err = s.runWithContext(session, final)
-	s.traceCommand(final, start, sink.StdoutPath(), sink.StderrPath(), err, false)
+	s.traceCommand(final, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
+	if err != nil {
+		logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", final, err))
+	} else {
+		logger.Info(logCtx, fmt.Sprintf("exec done: %s", final))
+	}
 	return "", err
 }
 
@@ -210,6 +229,7 @@ func (s *SSHExecutor) runWithContext(session *ssh.Session, cmd string) error {
 
 func (s *SSHExecutor) traceCommand(
 	command string,
+	traceID string,
 	start time.Time,
 	stdoutPath string,
 	stderrPath string,
@@ -225,6 +245,7 @@ func (s *SSHExecutor) traceCommand(
 	timedOut := err != nil && errors.Is(err, context.DeadlineExceeded)
 	event := tracemw.NewTraceEvent(
 		command,
+		traceID,
 		s.runtime.NodeName,
 		s.runtime.NodeAddr,
 		stdoutPath,

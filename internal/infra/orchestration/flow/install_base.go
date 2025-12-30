@@ -81,6 +81,7 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	if opts.LogDir != "" {
 		runtime = executor.WithLogDir(runtime, opts.LogDir)
 	}
+	runtime = executor.WithLogger(runtime, logger)
 
 	// 2. Create executor
 	exec, err := factory.Build(node, runtime)
@@ -149,11 +150,11 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	installer := base.New(components...).WithLogger(logger)
 
 	// 5. Run
-	logger.Info("install-base: start")
+	logger.Info(ctx, "install-base: start")
 	if err := installer.Install(ctx); err != nil {
-		logger.Error(fmt.Sprintf("install-base: failed: %v", err))
+		logger.Error(ctx, fmt.Sprintf("install-base: failed: %v", err))
 		return err
 	}
-	logger.Info("install-base: done")
+	logger.Info(ctx, "install-base: done")
 	return nil
 }

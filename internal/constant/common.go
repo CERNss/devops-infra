@@ -10,6 +10,8 @@ const (
 	DefaultSSHPort             = 22
 	DefaultLogDir              = "logs"
 	DefaultLogFile             = "logs/run.log"
+	DefaultOutputDir           = "logs/output"
+	DefaultOutputFile          = "logs/output.log"
 	DefaultTraceDir            = "logs/trace"
 	DefaultTraceFile           = "logs/trace/trace.jsonl"
 	DefaultCNIVersion          = "1.5.1"

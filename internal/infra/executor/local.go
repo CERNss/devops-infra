@@ -43,18 +43,26 @@ func (e *LocalExecutor) RunWithOutput(cmd string) (string, error) {
 
 func (e *LocalExecutor) run(cmd string, capture bool) (string, error) {
 	finalCmd := e.prepare(cmd)
+	traceID := logmw.NewTraceID()
+	logCtx := logmw.WithTraceID(e.runtime.Ctx, traceID)
+	logger := e.runtime.Logger
+	if logger == nil {
+		logger = logmw.NoopLogger()
+	}
 
 	if e.opts.Verbose || e.opts.DryRun {
 		fmt.Printf("[exec] %s\n", finalCmd)
 	}
 
 	if e.opts.DryRun {
-		e.traceCommand(finalCmd, time.Now(), "", "", nil, true)
+		logger.Info(logCtx, fmt.Sprintf("exec dry-run: %s", finalCmd))
+		e.traceCommand(finalCmd, traceID, time.Now(), "", "", nil, true)
 		return "", nil
 	}
 
 	start := time.Now()
-	sink, err := e.runtime.Output.Open(logmw.RuntimeInfo{LogDir: e.runtime.LogDir}, finalCmd)
+	logger.Info(logCtx, fmt.Sprintf("exec start: %s", finalCmd))
+	sink, err := e.runtime.Output.Open(logmw.RuntimeInfo{LogDir: e.runtime.LogDir, TraceID: traceID}, finalCmd)
 	if err != nil {
 		sink = logmw.NoopOutputSink()
 	}
@@ -83,12 +91,22 @@ func (e *LocalExecutor) run(cmd string, capture bool) (string, error) {
 
 	if capture {
 		err = c.Run()
-		e.traceCommand(finalCmd, start, sink.StdoutPath(), sink.StderrPath(), err, false)
+		e.traceCommand(finalCmd, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
+		if err != nil {
+			logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", finalCmd, err))
+		} else {
+			logger.Info(logCtx, fmt.Sprintf("exec done: %s", finalCmd))
+		}
 		return combinedBuf.String(), err
 	}
 
 	err = c.Run()
-	e.traceCommand(finalCmd, start, sink.StdoutPath(), sink.StderrPath(), err, false)
+	e.traceCommand(finalCmd, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
+	if err != nil {
+		logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", finalCmd, err))
+	} else {
+		logger.Info(logCtx, fmt.Sprintf("exec done: %s", finalCmd))
+	}
 	return "", err
 }
 
@@ -101,6 +119,7 @@ func (e *LocalExecutor) prepare(cmd string) string {
 
 func (e *LocalExecutor) traceCommand(
 	command string,
+	traceID string,
 	start time.Time,
 	stdoutPath string,
 	stderrPath string,
@@ -116,6 +135,7 @@ func (e *LocalExecutor) traceCommand(
 	timedOut := err != nil && errors.Is(err, context.DeadlineExceeded)
 	event := tracemw.NewTraceEvent(
 		command,
+		traceID,
 		e.runtime.NodeName,
 		e.runtime.NodeAddr,
 		stdoutPath,

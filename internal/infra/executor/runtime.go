@@ -11,6 +11,7 @@ type Runtime struct {
 	Ctx      context.Context
 	Trace    tracemw.TraceSink
 	Output   logmw.OutputSinkFactory
+	Logger   logmw.Logger
 	LogDir   string
 	NodeName string
 	NodeAddr string
@@ -36,7 +37,10 @@ func normalizeRuntime(rt Runtime) Runtime {
 		rt.Trace = tracemw.DefaultTraceSink()
 	}
 	if rt.Output == nil {
-		rt.Output = logmw.FileOutputSinkFactory{}
+		rt.Output = logmw.CombinedOutputSinkFactory{}
+	}
+	if rt.Logger == nil {
+		rt.Logger = logmw.DefaultLogger(rt.LogDir)
 	}
 	return rt
 }
@@ -54,5 +58,10 @@ func WithLogDir(rt Runtime, dir string) Runtime {
 
 func WithOutput(rt Runtime, output logmw.OutputSinkFactory) Runtime {
 	rt.Output = output
+	return rt
+}
+
+func WithLogger(rt Runtime, logger logmw.Logger) Runtime {
+	rt.Logger = logger
 	return rt
 }

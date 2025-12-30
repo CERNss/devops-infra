@@ -35,15 +35,15 @@ func (i *Installer) Install(ctx context.Context) error {
 	}
 	for _, c := range i.components {
 		if c.IsInstalled(ctx) {
-			logger.Info(fmt.Sprintf("component %s: already installed", c.Name()))
+			logger.Info(ctx, fmt.Sprintf("component %s: already installed", c.Name()))
 			continue
 		}
-		logger.Info(fmt.Sprintf("component %s: installing", c.Name()))
+		logger.Info(ctx, fmt.Sprintf("component %s: installing", c.Name()))
 		if err := c.Install(ctx); err != nil {
-			logger.Error(fmt.Sprintf("component %s: install failed: %v", c.Name(), err))
+			logger.Error(ctx, fmt.Sprintf("component %s: install failed: %v", c.Name(), err))
 			return err
 		}
-		logger.Info(fmt.Sprintf("component %s: installed", c.Name()))
+		logger.Info(ctx, fmt.Sprintf("component %s: installed", c.Name()))
 	}
 	return nil
 }

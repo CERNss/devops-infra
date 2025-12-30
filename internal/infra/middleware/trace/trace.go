@@ -15,6 +15,7 @@ import (
 
 type TraceEvent struct {
 	Command    string `json:"command"`
+	TraceID    string `json:"trace_id,omitempty"`
 	Node       string `json:"node,omitempty"`
 	NodeAddr   string `json:"node_addr,omitempty"`
 	StdoutPath string `json:"stdout_path,omitempty"`
@@ -108,6 +109,7 @@ func (s *fileTraceSink) OnCommand(event TraceEvent) {
 
 func NewTraceEvent(
 	command string,
+	traceID string,
 	nodeName string,
 	nodeAddr string,
 	stdoutPath string,
@@ -122,6 +124,7 @@ func NewTraceEvent(
 ) TraceEvent {
 	event := TraceEvent{
 		Command:    command,
+		TraceID:    traceID,
 		Node:       nodeName,
 		NodeAddr:   nodeAddr,
 		StdoutPath: stdoutPath,

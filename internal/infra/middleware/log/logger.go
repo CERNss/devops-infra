@@ -1,91 +1,86 @@
 package log
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"devops-infra/internal/constant"
 	pathutil "devops-infra/internal/utils/path"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type Logger interface {
-	Info(msg string)
-	Warn(msg string)
-	Error(msg string)
+	Info(ctx context.Context, msg string)
+	Warn(ctx context.Context, msg string)
+	Error(ctx context.Context, msg string)
 }
 
-type writerLogger struct {
-	mu sync.Mutex
-	w  io.Writer
-}
+type traceIDKey struct{}
 
-func (l *writerLogger) log(level string, msg string) {
-	if l == nil || l.w == nil {
-		return
+func WithTraceID(ctx context.Context, traceID string) context.Context {
+	if ctx == nil {
+		return context.WithValue(context.Background(), traceIDKey{}, traceID)
 	}
-	ts := time.Now().Format(time.RFC3339Nano)
-	l.mu.Lock()
-	_, _ = fmt.Fprintf(l.w, "%s %-5s %s\n", ts, level, msg)
-	l.mu.Unlock()
+	return context.WithValue(ctx, traceIDKey{}, traceID)
 }
 
-func (l *writerLogger) Info(msg string)  { l.log("INFO", msg) }
-func (l *writerLogger) Warn(msg string)  { l.log("WARN", msg) }
-func (l *writerLogger) Error(msg string) { l.log("ERROR", msg) }
-
-type fileLogger struct {
-	*writerLogger
-	file *os.File
-}
-
-func (l *fileLogger) Close() error {
-	if l == nil || l.file == nil {
-		return nil
+func TraceIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
 	}
-	return l.file.Close()
+	traceID, _ := ctx.Value(traceIDKey{}).(string)
+	return traceID
 }
 
-type multiLogger struct {
-	loggers []Logger
-}
-
-func (m multiLogger) Info(msg string) {
-	for _, logger := range m.loggers {
-		logger.Info(msg)
+func NewTraceID() string {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid())
 	}
+	return hex.EncodeToString(buf)
 }
 
-func (m multiLogger) Warn(msg string) {
-	for _, logger := range m.loggers {
-		logger.Warn(msg)
-	}
+type zapLogger struct {
+	logger *zap.Logger
 }
 
-func (m multiLogger) Error(msg string) {
-	for _, logger := range m.loggers {
-		logger.Error(msg)
+func (l *zapLogger) Info(ctx context.Context, msg string) {
+	l.logger.Info(msg, traceField(ctx))
+}
+
+func (l *zapLogger) Warn(ctx context.Context, msg string) {
+	l.logger.Warn(msg, traceField(ctx))
+}
+
+func (l *zapLogger) Error(ctx context.Context, msg string) {
+	l.logger.Error(msg, traceField(ctx))
+}
+
+func traceField(ctx context.Context) zap.Field {
+	traceID := TraceIDFromContext(ctx)
+	if traceID == "" {
+		return zap.Skip()
 	}
+	return zap.String("trace_id", traceID)
 }
 
 type noopLogger struct{}
 
-func (noopLogger) Info(string)  {}
-func (noopLogger) Warn(string)  {}
-func (noopLogger) Error(string) {}
+func (noopLogger) Info(context.Context, string)  {}
+func (noopLogger) Warn(context.Context, string)  {}
+func (noopLogger) Error(context.Context, string) {}
 
 func NoopLogger() Logger {
 	return noopLogger{}
 }
 
-func NewStderrLogger() Logger {
-	return &writerLogger{w: os.Stderr}
-}
-
-func NewFileLogger(path string) (Logger, error) {
+func NewJSONLogger(path string) (Logger, error) {
 	resolved, err := pathutil.ResolveUserPath(path)
 	if err != nil {
 		return nil, err
@@ -97,10 +92,35 @@ func NewFileLogger(path string) (Logger, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &fileLogger{
-		writerLogger: &writerLogger{w: f},
-		file:         f,
-	}, nil
+
+	encoderCfg := zap.NewProductionEncoderConfig()
+	encoderCfg.TimeKey = "ts"
+	encoderCfg.EncodeTime = zapcore.TimeEncoderOfLayout(time.RFC3339Nano)
+	encoderCfg.LevelKey = "level"
+	encoderCfg.MessageKey = "msg"
+	encoderCfg.CallerKey = ""
+	encoderCfg.StacktraceKey = ""
+	encoder := zapcore.NewJSONEncoder(encoderCfg)
+
+	fileCore := zapcore.NewCore(encoder, zapcore.AddSync(f), zapcore.InfoLevel)
+	stderrCore := zapcore.NewCore(encoder, zapcore.AddSync(os.Stderr), zapcore.InfoLevel)
+	logger := zap.New(zapcore.NewTee(fileCore, stderrCore))
+
+	return &zapLogger{logger: logger}, nil
+}
+
+func NewStderrLogger() Logger {
+	encoderCfg := zap.NewProductionEncoderConfig()
+	encoderCfg.TimeKey = "ts"
+	encoderCfg.EncodeTime = zapcore.TimeEncoderOfLayout(time.RFC3339Nano)
+	encoderCfg.LevelKey = "level"
+	encoderCfg.MessageKey = "msg"
+	encoderCfg.CallerKey = ""
+	encoderCfg.StacktraceKey = ""
+	encoder := zapcore.NewJSONEncoder(encoderCfg)
+	stderrCore := zapcore.NewCore(encoder, zapcore.AddSync(os.Stderr), zapcore.InfoLevel)
+	logger := zap.New(stderrCore)
+	return &zapLogger{logger: logger}
 }
 
 func DefaultLogger(logDir string) Logger {
@@ -108,12 +128,9 @@ func DefaultLogger(logDir string) Logger {
 	if logDir != "" {
 		path = filepath.Join(logDir, "run.log")
 	}
-	fileLogger, err := NewFileLogger(path)
+	logger, err := NewJSONLogger(path)
 	if err != nil {
 		return NewStderrLogger()
 	}
-	return multiLogger{loggers: []Logger{
-		NewStderrLogger(),
-		fileLogger,
-	}}
+	return logger
 }
