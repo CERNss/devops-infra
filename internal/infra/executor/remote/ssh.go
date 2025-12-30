@@ -20,8 +20,8 @@ import (
 )
 
 type SSHExecutor struct {
-	client *ssh.Client
-	opts   executor.Options
+	client  *ssh.Client
+	opts    executor.Options
 	runtime executor.Runtime
 }
 
@@ -47,7 +47,7 @@ func NewSSHExecutorWithRuntime(cfg SSHConfig, opts executor.Options, runtime exe
 
 	port := cfg.Port
 	if port == 0 {
-		port = 22
+		port = constant.DefaultSSHPort
 	}
 
 	hostKeyCallback, err := hostKeyCallback(cfg)
