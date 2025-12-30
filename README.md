@@ -6,6 +6,7 @@
 - `--sudo`：默认开启，以 sudo 执行命令。
 - `--dry-run`：仅打印将要执行的命令，不实际执行。
 - `--verbose`：输出更详细的执行信息。
+- `--timeout`：全局超时时间（默认 5m，传 0 关闭）。
 
 ### install 命令
 - `devops-infra install`：安装相关命令集合（目前仅实现 `base`）。

@@ -16,8 +16,6 @@ type Options struct {
 	Checksum string
 }
 
-const defaultArch = "amd64"
-
 type Installer struct {
 	os   osdriver.Driver
 	opts Options
@@ -121,7 +119,7 @@ func (c *Installer) resolveOptions() (string, string) {
 
 	arch := strings.TrimSpace(c.opts.Arch)
 	if arch == "" {
-		arch = defaultArch
+		arch = constant.DefaultContainerdArch
 	}
 
 	return version, arch

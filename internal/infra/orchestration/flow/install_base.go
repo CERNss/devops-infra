@@ -20,6 +20,7 @@ type InstallBaseOptions struct {
 	ExecOpts              executor.Options
 	Topology              *topology.Topology
 	ExecutorFactory       execfactory.ExecutorFactory
+	TraceSink             executor.TraceSink
 	EnableMirror          bool
 	LinuxMirrorSource     string
 	DockerInstallMode     docker.InstallMode
@@ -59,8 +60,14 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 		factory = execfactory.DefaultExecutorFactory{}
 	}
 
+	trace := opts.TraceSink
+	if trace == nil {
+		trace = executor.NewStderrTraceSink()
+	}
+	runtime := executor.NewRuntime(ctx, trace)
+
 	// 2. Create executor
-	exec, err := factory.Build(node)
+	exec, err := factory.Build(node, runtime)
 	if err != nil {
 		return err
 	}

@@ -2,21 +2,29 @@ package remote
 
 import (
 	"bytes"
-	"devops-infra/internal/infra/executor"
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"time"
 
+	"devops-infra/internal/infra/executor"
 	"golang.org/x/crypto/ssh"
 )
 
 type SSHExecutor struct {
 	client *ssh.Client
 	opts   executor.Options
+	runtime executor.Runtime
 }
 
 func NewSSHExecutor(cfg SSHConfig, opts executor.Options) (*SSHExecutor, error) {
+	return NewSSHExecutorWithRuntime(cfg, opts, executor.DefaultRuntime())
+}
+
+func NewSSHExecutorWithRuntime(cfg SSHConfig, opts executor.Options, runtime executor.Runtime) (*SSHExecutor, error) {
 	if cfg.Host == "" {
 		return nil, fmt.Errorf("ssh host is required")
 	}
@@ -50,7 +58,11 @@ func NewSSHExecutor(cfg SSHConfig, opts executor.Options) (*SSHExecutor, error) 
 		return nil, err
 	}
 
-	return &SSHExecutor{client: client, opts: opts}, nil
+	return &SSHExecutor{
+		client:  client,
+		opts:    opts,
+		runtime: executor.NewRuntime(runtime.Ctx, runtime.Trace),
+	}, nil
 }
 
 func (s *SSHExecutor) DryRun() bool {
@@ -76,31 +88,36 @@ func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
 	}
 
 	if s.opts.DryRun {
+		s.traceCommand(final, time.Now(), "", "", nil, true)
 		return "", nil
 	}
 
+	start := time.Now()
 	session, err := s.client.NewSession()
 	if err != nil {
+		s.traceCommand(final, start, "", "", err, false)
 		return "", err
 	}
 	defer func(session *ssh.Session) {
-		err := session.Close()
-		if err != nil {
-			return
-		}
+		_ = session.Close()
 	}(session)
 
-	var buf bytes.Buffer
+	stdoutBuf := &bytes.Buffer{}
+	stderrBuf := &bytes.Buffer{}
+	combinedBuf := &bytes.Buffer{}
 	if capture {
-		session.Stdout = &buf
-		session.Stderr = &buf
-		err := session.Run(final)
-		return buf.String(), err
+		session.Stdout = io.MultiWriter(combinedBuf, stdoutBuf)
+		session.Stderr = io.MultiWriter(combinedBuf, stderrBuf)
+		err := s.runWithContext(session, final)
+		s.traceCommand(final, start, stdoutBuf.String(), stderrBuf.String(), err, false)
+		return combinedBuf.String(), err
 	}
 
-	session.Stdout = os.Stdout
-	session.Stderr = os.Stderr
-	return "", session.Run(final)
+	session.Stdout = io.MultiWriter(os.Stdout, combinedBuf, stdoutBuf)
+	session.Stderr = io.MultiWriter(os.Stderr, combinedBuf, stderrBuf)
+	err = s.runWithContext(session, final)
+	s.traceCommand(final, start, stdoutBuf.String(), stderrBuf.String(), err, false)
+	return "", err
 }
 
 func sshAuthMethods(cfg SSHConfig) ([]ssh.AuthMethod, error) {
@@ -123,4 +140,47 @@ func sshAuthMethods(cfg SSHConfig) ([]ssh.AuthMethod, error) {
 	}
 
 	return methods, nil
+}
+
+func (s *SSHExecutor) runWithContext(session *ssh.Session, cmd string) error {
+	ctx := s.runtime.Ctx
+	if ctx == nil {
+		return session.Run(cmd)
+	}
+
+	if err := session.Start(cmd); err != nil {
+		return err
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- session.Wait()
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		_ = session.Close()
+		return ctx.Err()
+	}
+}
+
+func (s *SSHExecutor) traceCommand(
+	command string,
+	start time.Time,
+	stdout string,
+	stderr string,
+	err error,
+	dryRun bool,
+) {
+	trace := s.runtime.Trace
+	if trace == nil {
+		return
+	}
+
+	end := time.Now()
+	timedOut := err != nil && errors.Is(err, context.DeadlineExceeded)
+	event := executor.NewTraceEvent(command, start, end, stdout, stderr, err, dryRun, timedOut)
+	trace.OnCommand(event)
 }
