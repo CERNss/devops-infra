@@ -129,17 +129,27 @@ func NoopOutputSink() OutputSink {
 }
 
 type CombinedOutputSinkFactory struct {
+	Dir  string
 	Path string
 }
 
 func (f CombinedOutputSinkFactory) Open(info RuntimeInfo, command string) (OutputSink, error) {
+	traceID := info.TraceID
+	if traceID == "" {
+		traceID = fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid())
+	}
+
 	path := f.Path
 	if path == "" {
-		if info.LogDir != "" {
-			path = filepath.Join(info.LogDir, "output.log")
-		} else {
-			path = constant.DefaultOutputFile
+		dir := f.Dir
+		if dir == "" {
+			if info.LogDir != "" {
+				dir = filepath.Join(info.LogDir, "output")
+			} else {
+				dir = constant.DefaultOutputDir
+			}
 		}
+		path = filepath.Join(dir, "trace-"+traceID+".log")
 	}
 
 	resolved, err := pathutil.ResolveUserPath(path)
@@ -153,11 +163,6 @@ func (f CombinedOutputSinkFactory) Open(info RuntimeInfo, command string) (Outpu
 	file, err := os.OpenFile(resolved, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return noopOutputSink{}, err
-	}
-
-	traceID := info.TraceID
-	if traceID == "" {
-		traceID = fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid())
 	}
 
 	sharedMu := &sync.Mutex{}

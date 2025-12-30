@@ -50,17 +50,15 @@ func (e *LocalExecutor) run(cmd string, capture bool) (string, error) {
 		logger = logmw.NoopLogger()
 	}
 
-	if e.opts.Verbose || e.opts.DryRun {
-		fmt.Printf("[exec] %s\n", finalCmd)
-	}
-
 	if e.opts.DryRun {
+		PrintCommandStart(e.opts.Verbose, true, finalCmd)
 		logger.Info(logCtx, fmt.Sprintf("exec dry-run: %s", finalCmd))
 		e.traceCommand(finalCmd, traceID, time.Now(), "", "", nil, true)
 		return "", nil
 	}
 
 	start := time.Now()
+	PrintCommandStart(e.opts.Verbose, false, finalCmd)
 	logger.Info(logCtx, fmt.Sprintf("exec start: %s", finalCmd))
 	sink, err := e.runtime.Output.Open(logmw.RuntimeInfo{
 		Ctx:     e.runtime.Ctx,
@@ -85,7 +83,7 @@ func (e *LocalExecutor) run(cmd string, capture bool) (string, error) {
 	if capture {
 		stdoutWriter = io.MultiWriter(stdoutWriter, combinedBuf)
 		stderrWriter = io.MultiWriter(stderrWriter, combinedBuf)
-	} else {
+	} else if e.opts.Verbose {
 		stdoutWriter = io.MultiWriter(stdoutWriter, os.Stdout)
 		stderrWriter = io.MultiWriter(stderrWriter, os.Stderr)
 	}
@@ -99,8 +97,10 @@ func (e *LocalExecutor) run(cmd string, capture bool) (string, error) {
 		e.traceCommand(finalCmd, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
 		if err != nil {
 			logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", finalCmd, err))
+			PrintCommandDone(e.opts.Verbose, start, finalCmd, err)
 		} else {
 			logger.Info(logCtx, fmt.Sprintf("exec done: %s", finalCmd))
+			PrintCommandDone(e.opts.Verbose, start, finalCmd, nil)
 		}
 		return combinedBuf.String(), err
 	}
@@ -109,8 +109,10 @@ func (e *LocalExecutor) run(cmd string, capture bool) (string, error) {
 	e.traceCommand(finalCmd, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
 	if err != nil {
 		logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", finalCmd, err))
+		PrintCommandDone(e.opts.Verbose, start, finalCmd, err)
 	} else {
 		logger.Info(logCtx, fmt.Sprintf("exec done: %s", finalCmd))
+		PrintCommandDone(e.opts.Verbose, start, finalCmd, nil)
 	}
 	return "", err
 }

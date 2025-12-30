@@ -64,8 +64,7 @@ func NewJSONLogger(path string) (logmw.Logger, error) {
 	encoder := zapcore.NewJSONEncoder(encoderCfg)
 
 	fileCore := zapcore.NewCore(encoder, zapcore.AddSync(f), zapcore.InfoLevel)
-	stderrCore := zapcore.NewCore(encoder, zapcore.AddSync(os.Stderr), zapcore.InfoLevel)
-	logger := zap.New(zapcore.NewTee(fileCore, stderrCore))
+	logger := zap.New(fileCore)
 
 	return &zapLogger{logger: logger}, nil
 }
@@ -91,7 +90,7 @@ func DefaultLogger(logDir string) logmw.Logger {
 	}
 	logger, err := NewJSONLogger(path)
 	if err != nil {
-		return NewStderrLogger()
+		return logmw.NoopLogger()
 	}
 	return logger
 }

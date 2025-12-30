@@ -99,17 +99,15 @@ func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
 		logger = logmw.NoopLogger()
 	}
 
-	if s.opts.Verbose || s.opts.DryRun {
-		fmt.Printf("[ssh %s] %s\n", s.client.RemoteAddr(), final)
-	}
-
 	if s.opts.DryRun {
+		executor.PrintCommandStart(s.opts.Verbose, true, final)
 		logger.Info(logCtx, fmt.Sprintf("exec dry-run: %s", final))
 		s.traceCommand(final, traceID, time.Now(), "", "", nil, true)
 		return "", nil
 	}
 
 	start := time.Now()
+	executor.PrintCommandStart(s.opts.Verbose, false, final)
 	logger.Info(logCtx, fmt.Sprintf("exec start: %s", final))
 	sink, err := s.runtime.Output.Open(logmw.RuntimeInfo{
 		Ctx:     s.runtime.Ctx,
@@ -126,6 +124,7 @@ func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
 	if err != nil {
 		s.traceCommand(final, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
 		logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", final, err))
+		executor.PrintCommandDone(s.opts.Verbose, start, final, err)
 		return "", err
 	}
 	defer func(session *ssh.Session) {
@@ -149,20 +148,29 @@ func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
 		s.traceCommand(final, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
 		if err != nil {
 			logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", final, err))
+			executor.PrintCommandDone(s.opts.Verbose, start, final, err)
 		} else {
 			logger.Info(logCtx, fmt.Sprintf("exec done: %s", final))
+			executor.PrintCommandDone(s.opts.Verbose, start, final, nil)
 		}
 		return combinedBuf.String(), err
 	}
 
-	session.Stdout = io.MultiWriter(os.Stdout, stdoutWriter)
-	session.Stderr = io.MultiWriter(os.Stderr, stderrWriter)
+	if s.opts.Verbose {
+		session.Stdout = io.MultiWriter(os.Stdout, stdoutWriter)
+		session.Stderr = io.MultiWriter(os.Stderr, stderrWriter)
+	} else {
+		session.Stdout = stdoutWriter
+		session.Stderr = stderrWriter
+	}
 	err = s.runWithContext(session, final)
 	s.traceCommand(final, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
 	if err != nil {
 		logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", final, err))
+		executor.PrintCommandDone(s.opts.Verbose, start, final, err)
 	} else {
 		logger.Info(logCtx, fmt.Sprintf("exec done: %s", final))
+		executor.PrintCommandDone(s.opts.Verbose, start, final, nil)
 	}
 	return "", err
 }
