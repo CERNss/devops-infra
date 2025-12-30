@@ -5,8 +5,9 @@ import (
 	"fmt"
 
 	"devops-infra/internal/infra/executor"
-	logmw "devops-infra/internal/infra/middleware/log"
-	tracemw "devops-infra/internal/infra/middleware/trace"
+	"devops-infra/internal/interceptor"
+	logmw "devops-infra/internal/middleware/log"
+	tracemw "devops-infra/internal/middleware/trace"
 	"devops-infra/internal/infra/install/base"
 	"devops-infra/internal/infra/install/base/cni"
 	"devops-infra/internal/infra/install/base/containerd"
@@ -72,7 +73,7 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	}
 	logger := opts.Logger
 	if logger == nil {
-		logger = logmw.DefaultLogger(opts.LogDir)
+		logger = interceptor.DefaultLogger(opts.LogDir)
 	}
 	runtime := executor.NewRuntime(ctx, trace)
 	if opts.OutputFactory != nil {

@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	logmw "devops-infra/internal/infra/middleware/log"
+	logmw "devops-infra/internal/middleware/log"
 )
 
 type Component interface {

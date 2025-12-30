@@ -12,8 +12,8 @@ import (
 
 	"devops-infra/internal/constant"
 	"devops-infra/internal/infra/executor"
-	logmw "devops-infra/internal/infra/middleware/log"
-	tracemw "devops-infra/internal/infra/middleware/trace"
+	logmw "devops-infra/internal/middleware/log"
+	tracemw "devops-infra/internal/middleware/trace"
 	pathutil "devops-infra/internal/utils/path"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -111,7 +111,12 @@ func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
 
 	start := time.Now()
 	logger.Info(logCtx, fmt.Sprintf("exec start: %s", final))
-	sink, err := s.runtime.Output.Open(logmw.RuntimeInfo{LogDir: s.runtime.LogDir, TraceID: traceID}, final)
+	sink, err := s.runtime.Output.Open(logmw.RuntimeInfo{
+		Ctx:     s.runtime.Ctx,
+		Logger:  logger,
+		LogDir:  s.runtime.LogDir,
+		TraceID: traceID,
+	}, final)
 	if err != nil {
 		sink = logmw.NoopOutputSink()
 	}

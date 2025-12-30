@@ -3,8 +3,9 @@ package executor
 import (
 	"context"
 
-	logmw "devops-infra/internal/infra/middleware/log"
-	tracemw "devops-infra/internal/infra/middleware/trace"
+	"devops-infra/internal/interceptor"
+	logmw "devops-infra/internal/middleware/log"
+	tracemw "devops-infra/internal/middleware/trace"
 )
 
 type Runtime struct {
@@ -40,7 +41,7 @@ func normalizeRuntime(rt Runtime) Runtime {
 		rt.Output = logmw.CombinedOutputSinkFactory{}
 	}
 	if rt.Logger == nil {
-		rt.Logger = logmw.DefaultLogger(rt.LogDir)
+		rt.Logger = interceptor.DefaultLogger(rt.LogDir)
 	}
 	return rt
 }

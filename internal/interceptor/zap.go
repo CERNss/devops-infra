@@ -1,50 +1,17 @@
-package log
+package interceptor
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
 	"devops-infra/internal/constant"
+	logmw "devops-infra/internal/middleware/log"
 	pathutil "devops-infra/internal/utils/path"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
-
-type Logger interface {
-	Info(ctx context.Context, msg string)
-	Warn(ctx context.Context, msg string)
-	Error(ctx context.Context, msg string)
-}
-
-type traceIDKey struct{}
-
-func WithTraceID(ctx context.Context, traceID string) context.Context {
-	if ctx == nil {
-		return context.WithValue(context.Background(), traceIDKey{}, traceID)
-	}
-	return context.WithValue(ctx, traceIDKey{}, traceID)
-}
-
-func TraceIDFromContext(ctx context.Context) string {
-	if ctx == nil {
-		return ""
-	}
-	traceID, _ := ctx.Value(traceIDKey{}).(string)
-	return traceID
-}
-
-func NewTraceID() string {
-	buf := make([]byte, 16)
-	if _, err := rand.Read(buf); err != nil {
-		return fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid())
-	}
-	return hex.EncodeToString(buf)
-}
 
 type zapLogger struct {
 	logger *zap.Logger
@@ -62,25 +29,19 @@ func (l *zapLogger) Error(ctx context.Context, msg string) {
 	l.logger.Error(msg, traceField(ctx))
 }
 
+func (l *zapLogger) Output(ctx context.Context, stream string, line string) {
+	l.logger.Info("cmd_output", traceField(ctx), zap.String("stream", stream), zap.String("output", line))
+}
+
 func traceField(ctx context.Context) zap.Field {
-	traceID := TraceIDFromContext(ctx)
+	traceID := logmw.TraceIDFromContext(ctx)
 	if traceID == "" {
 		return zap.Skip()
 	}
 	return zap.String("trace_id", traceID)
 }
 
-type noopLogger struct{}
-
-func (noopLogger) Info(context.Context, string)  {}
-func (noopLogger) Warn(context.Context, string)  {}
-func (noopLogger) Error(context.Context, string) {}
-
-func NoopLogger() Logger {
-	return noopLogger{}
-}
-
-func NewJSONLogger(path string) (Logger, error) {
+func NewJSONLogger(path string) (logmw.Logger, error) {
 	resolved, err := pathutil.ResolveUserPath(path)
 	if err != nil {
 		return nil, err
@@ -109,7 +70,7 @@ func NewJSONLogger(path string) (Logger, error) {
 	return &zapLogger{logger: logger}, nil
 }
 
-func NewStderrLogger() Logger {
+func NewStderrLogger() logmw.Logger {
 	encoderCfg := zap.NewProductionEncoderConfig()
 	encoderCfg.TimeKey = "ts"
 	encoderCfg.EncodeTime = zapcore.TimeEncoderOfLayout(time.RFC3339Nano)
@@ -123,7 +84,7 @@ func NewStderrLogger() Logger {
 	return &zapLogger{logger: logger}
 }
 
-func DefaultLogger(logDir string) Logger {
+func DefaultLogger(logDir string) logmw.Logger {
 	path := constant.DefaultLogFile
 	if logDir != "" {
 		path = filepath.Join(logDir, "run.log")

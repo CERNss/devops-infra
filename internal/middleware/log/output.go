@@ -2,6 +2,7 @@ package log
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -26,7 +27,9 @@ type OutputSinkFactory interface {
 }
 
 type RuntimeInfo struct {
-	LogDir string
+	Ctx     context.Context
+	Logger  Logger
+	LogDir  string
 	TraceID string
 }
 
@@ -163,19 +166,35 @@ func (f CombinedOutputSinkFactory) Open(info RuntimeInfo, command string) (Outpu
 		return noopOutputSink{}, err
 	}
 
+	var logCtx context.Context
+	if info.Logger != nil {
+		logCtx = WithTraceID(info.Ctx, traceID)
+	}
+
+	onStdoutLine := func(line string) {}
+	onStderrLine := func(line string) {}
+	if info.Logger != nil {
+		onStdoutLine = func(line string) {
+			info.Logger.Output(logCtx, "stdout", line)
+		}
+		onStderrLine = func(line string) {
+			info.Logger.Output(logCtx, "stderr", line)
+		}
+	}
+
 	return &CombinedOutputSink{
 		path:         resolved,
 		file:         file,
-		stdoutWriter: newPrefixedWriter(sharedMu, file, traceID, "stdout"),
-		stderrWriter: newPrefixedWriter(sharedMu, file, traceID, "stderr"),
+		stdoutWriter: newPrefixedWriter(sharedMu, file, traceID, "stdout", onStdoutLine),
+		stderrWriter: newPrefixedWriter(sharedMu, file, traceID, "stderr", onStderrLine),
 	}, nil
 }
 
 type CombinedOutputSink struct {
 	path         string
 	file         *os.File
-	stdoutWriter io.Writer
-	stderrWriter io.Writer
+	stdoutWriter *prefixedWriter
+	stderrWriter *prefixedWriter
 }
 
 func (s *CombinedOutputSink) Stdout() io.Writer {
@@ -198,6 +217,12 @@ func (s *CombinedOutputSink) Close() error {
 	if s == nil || s.file == nil {
 		return nil
 	}
+	if s.stdoutWriter != nil {
+		s.stdoutWriter.Flush()
+	}
+	if s.stderrWriter != nil {
+		s.stderrWriter.Flush()
+	}
 	return s.file.Close()
 }
 
@@ -207,15 +232,18 @@ type prefixedWriter struct {
 	traceID     string
 	stream      string
 	atLineStart bool
+	buf         bytes.Buffer
+	onLine      func(line string)
 }
 
-func newPrefixedWriter(mu *sync.Mutex, w io.Writer, traceID string, stream string) *prefixedWriter {
+func newPrefixedWriter(mu *sync.Mutex, w io.Writer, traceID string, stream string, onLine func(line string)) *prefixedWriter {
 	return &prefixedWriter{
 		mu:          mu,
 		w:           w,
 		traceID:     traceID,
 		stream:      stream,
 		atLineStart: true,
+		onLine:      onLine,
 	}
 }
 
@@ -238,6 +266,9 @@ func (p *prefixedWriter) Write(b []byte) (int, error) {
 			if _, err := p.w.Write(b); err != nil {
 				return consumed, err
 			}
+			if len(b) > 0 {
+				_, _ = p.buf.Write(b)
+			}
 			consumed += len(b)
 			return consumed, nil
 		}
@@ -246,12 +277,31 @@ func (p *prefixedWriter) Write(b []byte) (int, error) {
 		if _, err := p.w.Write(chunk); err != nil {
 			return consumed, err
 		}
+		if len(chunk) > 1 {
+			_, _ = p.buf.Write(chunk[:len(chunk)-1])
+		}
+		if p.onLine != nil {
+			p.onLine(p.buf.String())
+		}
+		p.buf.Reset()
 		consumed += len(chunk)
 		b = b[idx+1:]
 		p.atLineStart = true
 	}
 
 	return consumed, nil
+}
+
+func (p *prefixedWriter) Flush() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.buf.Len() == 0 {
+		return
+	}
+	if p.onLine != nil {
+		p.onLine(p.buf.String())
+	}
+	p.buf.Reset()
 }
 
 func writeCommandHeader(mu *sync.Mutex, w io.Writer, traceID string, command string) error {

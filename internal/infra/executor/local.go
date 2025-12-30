@@ -10,8 +10,8 @@ import (
 	"os/exec"
 	"time"
 
-	logmw "devops-infra/internal/infra/middleware/log"
-	tracemw "devops-infra/internal/infra/middleware/trace"
+	logmw "devops-infra/internal/middleware/log"
+	tracemw "devops-infra/internal/middleware/trace"
 )
 
 type LocalExecutor struct {
@@ -62,7 +62,12 @@ func (e *LocalExecutor) run(cmd string, capture bool) (string, error) {
 
 	start := time.Now()
 	logger.Info(logCtx, fmt.Sprintf("exec start: %s", finalCmd))
-	sink, err := e.runtime.Output.Open(logmw.RuntimeInfo{LogDir: e.runtime.LogDir, TraceID: traceID}, finalCmd)
+	sink, err := e.runtime.Output.Open(logmw.RuntimeInfo{
+		Ctx:     e.runtime.Ctx,
+		Logger:  logger,
+		LogDir:  e.runtime.LogDir,
+		TraceID: traceID,
+	}, finalCmd)
 	if err != nil {
 		sink = logmw.NoopOutputSink()
 	}
