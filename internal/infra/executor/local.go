@@ -102,6 +102,6 @@ func (e *LocalExecutor) traceCommand(
 
 	end := time.Now()
 	timedOut := err != nil && errors.Is(err, context.DeadlineExceeded)
-	event := NewTraceEvent(command, start, end, stdout, stderr, err, dryRun, timedOut)
+	event := NewTraceEvent(command, e.runtime.NodeName, e.runtime.NodeAddr, start, end, stdout, stderr, err, dryRun, timedOut)
 	trace.OnCommand(event)
 }

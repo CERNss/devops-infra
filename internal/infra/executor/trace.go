@@ -11,6 +11,8 @@ import (
 
 type TraceEvent struct {
 	Command    string `json:"command"`
+	Node       string `json:"node,omitempty"`
+	NodeAddr   string `json:"node_addr,omitempty"`
 	Start      string `json:"start"`
 	End        string `json:"end"`
 	DurationMs int64  `json:"duration_ms"`
@@ -58,6 +60,8 @@ func NoopTraceSink() TraceSink {
 
 func NewTraceEvent(
 	command string,
+	nodeName string,
+	nodeAddr string,
 	start time.Time,
 	end time.Time,
 	stdout string,
@@ -68,6 +72,8 @@ func NewTraceEvent(
 ) TraceEvent {
 	event := TraceEvent{
 		Command:    command,
+		Node:       nodeName,
+		NodeAddr:   nodeAddr,
 		Start:      start.Format(time.RFC3339Nano),
 		End:        end.Format(time.RFC3339Nano),
 		DurationMs: end.Sub(start).Milliseconds(),

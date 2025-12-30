@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func ResolvePath(rel string) (string, error) {
@@ -42,6 +43,28 @@ func ResolvePath(rel string) (string, error) {
 	}
 
 	return "", fmt.Errorf("path not found: %s", rel)
+}
+
+func ResolveUserPath(input string) (string, error) {
+	value := strings.TrimSpace(input)
+	if value == "" {
+		return "", fmt.Errorf("path is empty")
+	}
+	if strings.HasPrefix(value, "~") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		if value == "~" {
+			return home, nil
+		}
+		if strings.HasPrefix(value, "~/") {
+			return filepath.Join(home, strings.TrimPrefix(value, "~/")), nil
+		}
+		return "", fmt.Errorf("unsupported home expansion: %s", value)
+	}
+
+	return filepath.Clean(value), nil
 }
 
 func fileExists(path string) bool {

@@ -3,12 +3,18 @@ package executor
 import "context"
 
 type Runtime struct {
-	Ctx   context.Context
-	Trace TraceSink
+	Ctx      context.Context
+	Trace    TraceSink
+	NodeName string
+	NodeAddr string
 }
 
 func NewRuntime(ctx context.Context, trace TraceSink) Runtime {
 	return normalizeRuntime(Runtime{Ctx: ctx, Trace: trace})
+}
+
+func NormalizeRuntime(rt Runtime) Runtime {
+	return normalizeRuntime(rt)
 }
 
 func DefaultRuntime() Runtime {
@@ -22,5 +28,11 @@ func normalizeRuntime(rt Runtime) Runtime {
 	if rt.Trace == nil {
 		rt.Trace = NoopTraceSink()
 	}
+	return rt
+}
+
+func WithNode(rt Runtime, name string, addr string) Runtime {
+	rt.NodeName = name
+	rt.NodeAddr = addr
 	return rt
 }
