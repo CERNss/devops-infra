@@ -7,4 +7,5 @@ const (
 	DefaultContainerdArch      = "amd64"
 	DefaultDockerEngineVersion = "27.5.1"
 	DefaultKnownHostsPath      = "~/.ssh/known_hosts"
+	DefaultSSHPort             = 22
 )
