@@ -1,16 +1,22 @@
 package executor
 
-import "context"
+import (
+	"context"
+
+	logmw "devops-infra/internal/infra/middleware/log"
+	tracemw "devops-infra/internal/infra/middleware/trace"
+)
 
 type Runtime struct {
 	Ctx      context.Context
-	Trace    TraceSink
+	Trace    tracemw.TraceSink
+	Output   logmw.OutputSinkFactory
 	LogDir   string
 	NodeName string
 	NodeAddr string
 }
 
-func NewRuntime(ctx context.Context, trace TraceSink) Runtime {
+func NewRuntime(ctx context.Context, trace tracemw.TraceSink) Runtime {
 	return normalizeRuntime(Runtime{Ctx: ctx, Trace: trace})
 }
 
@@ -27,7 +33,10 @@ func normalizeRuntime(rt Runtime) Runtime {
 		rt.Ctx = context.Background()
 	}
 	if rt.Trace == nil {
-		rt.Trace = NoopTraceSink()
+		rt.Trace = tracemw.DefaultTraceSink()
+	}
+	if rt.Output == nil {
+		rt.Output = logmw.FileOutputSinkFactory{}
 	}
 	return rt
 }
@@ -40,5 +49,10 @@ func WithNode(rt Runtime, name string, addr string) Runtime {
 
 func WithLogDir(rt Runtime, dir string) Runtime {
 	rt.LogDir = dir
+	return rt
+}
+
+func WithOutput(rt Runtime, output logmw.OutputSinkFactory) Runtime {
+	rt.Output = output
 	return rt
 }

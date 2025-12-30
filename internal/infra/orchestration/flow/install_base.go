@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"devops-infra/internal/infra/executor"
+	logmw "devops-infra/internal/infra/middleware/log"
+	tracemw "devops-infra/internal/infra/middleware/trace"
 	"devops-infra/internal/infra/install/base"
 	"devops-infra/internal/infra/install/base/containerd"
 	"devops-infra/internal/infra/install/base/docker"
@@ -20,7 +22,9 @@ type InstallBaseOptions struct {
 	ExecOpts              executor.Options
 	Topology              *topology.Topology
 	ExecutorFactory       execfactory.ExecutorFactory
-	TraceSink             executor.TraceSink
+	TraceSink             tracemw.TraceSink
+	OutputFactory         logmw.OutputSinkFactory
+	LogDir                string
 	EnableMirror          bool
 	LinuxMirrorSource     string
 	DockerInstallMode     docker.InstallMode
@@ -62,9 +66,15 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 
 	trace := opts.TraceSink
 	if trace == nil {
-		trace = executor.NewStderrTraceSink()
+		trace = tracemw.DefaultTraceSink()
 	}
 	runtime := executor.NewRuntime(ctx, trace)
+	if opts.OutputFactory != nil {
+		runtime = executor.WithOutput(runtime, opts.OutputFactory)
+	}
+	if opts.LogDir != "" {
+		runtime = executor.WithLogDir(runtime, opts.LogDir)
+	}
 
 	// 2. Create executor
 	exec, err := factory.Build(node, runtime)

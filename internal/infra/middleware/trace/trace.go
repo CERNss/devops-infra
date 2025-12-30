@@ -1,12 +1,16 @@
-package executor
+package trace
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
+
+	"devops-infra/internal/constant"
+	pathutil "devops-infra/internal/utils/path"
 )
 
 type TraceEvent struct {
@@ -38,6 +42,14 @@ func NewStderrTraceSink() TraceSink {
 	return &stderrTraceSink{w: os.Stderr}
 }
 
+func DefaultTraceSink() TraceSink {
+	sink, err := NewFileTraceSink(constant.DefaultTraceFile)
+	if err != nil {
+		return NewStderrTraceSink()
+	}
+	return sink
+}
+
 func (s *stderrTraceSink) OnCommand(event TraceEvent) {
 	payload, err := json.Marshal(event)
 	if err != nil {
@@ -58,6 +70,40 @@ func (noopTraceSink) OnCommand(TraceEvent) {}
 
 func NoopTraceSink() TraceSink {
 	return noopTraceSink{}
+}
+
+type fileTraceSink struct {
+	mu sync.Mutex
+	f  *os.File
+}
+
+func NewFileTraceSink(path string) (TraceSink, error) {
+	resolved, err := pathutil.ResolveUserPath(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(resolved), 0o755); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(resolved, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	return &fileTraceSink{f: f}, nil
+}
+
+func (s *fileTraceSink) OnCommand(event TraceEvent) {
+	payload, err := json.Marshal(event)
+	if err != nil {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		fmt.Fprintf(s.f, "trace marshal error: %v\n", err)
+		return
+	}
+
+	s.mu.Lock()
+	_, _ = s.f.Write(append(payload, '\n'))
+	s.mu.Unlock()
 }
 
 func NewTraceEvent(

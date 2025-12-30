@@ -9,6 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"time"
+
+	logmw "devops-infra/internal/infra/middleware/log"
+	tracemw "devops-infra/internal/infra/middleware/trace"
 )
 
 type LocalExecutor struct {
@@ -51,22 +54,20 @@ func (e *LocalExecutor) run(cmd string, capture bool) (string, error) {
 	}
 
 	start := time.Now()
-	stdoutPath, stderrPath, stdoutFile, stderrFile := OpenCommandLogs(e.runtime)
-	if stdoutFile != nil {
-		defer stdoutFile.Close()
+	sink, err := e.runtime.Output.Open(logmw.RuntimeInfo{LogDir: e.runtime.LogDir}, finalCmd)
+	if err != nil {
+		sink = logmw.NoopOutputSink()
 	}
-	if stderrFile != nil {
-		defer stderrFile.Close()
-	}
+	defer sink.Close()
 
 	combinedBuf := &bytes.Buffer{}
-	stdoutWriter := io.Writer(io.Discard)
-	stderrWriter := io.Writer(io.Discard)
-	if stdoutFile != nil {
-		stdoutWriter = stdoutFile
+	stdoutWriter := sink.Stdout()
+	stderrWriter := sink.Stderr()
+	if stdoutWriter == nil {
+		stdoutWriter = io.Discard
 	}
-	if stderrFile != nil {
-		stderrWriter = stderrFile
+	if stderrWriter == nil {
+		stderrWriter = io.Discard
 	}
 	if capture {
 		stdoutWriter = io.MultiWriter(stdoutWriter, combinedBuf)
@@ -81,13 +82,13 @@ func (e *LocalExecutor) run(cmd string, capture bool) (string, error) {
 	c.Stderr = stderrWriter
 
 	if capture {
-		err := c.Run()
-		e.traceCommand(finalCmd, start, stdoutPath, stderrPath, err, false)
+		err = c.Run()
+		e.traceCommand(finalCmd, start, sink.StdoutPath(), sink.StderrPath(), err, false)
 		return combinedBuf.String(), err
 	}
 
-	err := c.Run()
-	e.traceCommand(finalCmd, start, stdoutPath, stderrPath, err, false)
+	err = c.Run()
+	e.traceCommand(finalCmd, start, sink.StdoutPath(), sink.StderrPath(), err, false)
 	return "", err
 }
 
@@ -113,7 +114,7 @@ func (e *LocalExecutor) traceCommand(
 
 	end := time.Now()
 	timedOut := err != nil && errors.Is(err, context.DeadlineExceeded)
-	event := NewTraceEvent(
+	event := tracemw.NewTraceEvent(
 		command,
 		e.runtime.NodeName,
 		e.runtime.NodeAddr,
