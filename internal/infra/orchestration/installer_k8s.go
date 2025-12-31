@@ -6,7 +6,7 @@ import (
 
 	"devops-infra/internal/constant"
 	"devops-infra/internal/infra/executor"
-	"devops-infra/internal/infra/install_operation/base"
+	"devops-infra/internal/infra/install/base"
 	"devops-infra/internal/infra/os"
 	platformk8s "devops-infra/internal/infra/platform/k8s"
 )
