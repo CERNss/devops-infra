@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"devops-infra/internal/constant"
+	"devops-infra/internal/infra/executor"
 	osdriver "devops-infra/internal/infra/os"
 	"devops-infra/internal/utils/mirror"
 )
@@ -19,7 +20,6 @@ const (
 
 const (
 	defaultRuncVersion = "1.1.13"
-	defaultCNIVersion  = "1.5.1"
 )
 
 type Installer struct {
@@ -50,12 +50,16 @@ func New(os osdriver.Driver, opts Options) *Installer {
 func (d *Installer) Name() string { return "docker" }
 
 func (d *Installer) IsInstalled(ctx context.Context) bool {
+	exec := d.os.Exec()
+	if executor.IsDryRun(exec) {
+		return false
+	}
 	switch d.mode {
 	case InstallModeNerdctl:
-		_, err := d.os.Exec().RunWithOutput("test -L /usr/bin/docker")
+		_, err := exec.RunWithOutput("test -L /usr/bin/docker")
 		return err == nil
 	case InstallModeOfficial, "":
-		_, err := d.os.Exec().RunWithOutput("docker --version")
+		_, err := exec.RunWithOutput("docker --version")
 		return err == nil
 	default:
 		return false
@@ -69,6 +73,9 @@ func (d *Installer) Install(ctx context.Context) error {
 	case InstallModeNerdctl:
 		if err := d.ensureNerdctl(); err != nil {
 			return err
+		}
+		if executor.IsDryRun(exec) {
+			return exec.Run("ln -sf $(command -v nerdctl) /usr/bin/docker")
 		}
 		nerdctlPath, err := exec.RunWithOutput("command -v nerdctl")
 		if err != nil {
@@ -119,6 +126,41 @@ func (d *Installer) Install(ctx context.Context) error {
 func (d *Installer) ensureNerdctl() error {
 	exec := d.os.Exec()
 
+	if executor.IsDryRun(exec) {
+		if err := exec.Run(fmt.Sprintf(`
+set -e
+VERSION=%s
+ARCH=amd64
+curl -L https://github.com/containerd/nerdctl/releases/download/v${VERSION}/nerdctl-${VERSION}-linux-${ARCH}.tar.gz \
+ | tar -C /usr/local/bin -xz
+`, constant.DefaultNerdctlVersion)); err != nil {
+			return err
+		}
+
+		if err := exec.Run(fmt.Sprintf(`
+set -e
+VERSION=%s
+ARCH=amd64
+curl -L -o /usr/local/sbin/runc https://github.com/opencontainers/runc/releases/download/v${VERSION}/runc.${ARCH}
+chmod +x /usr/local/sbin/runc
+`, defaultRuncVersion)); err != nil {
+			return err
+		}
+
+		if err := exec.Run(fmt.Sprintf(`
+set -e
+VERSION=%s
+ARCH=amd64
+mkdir -p /opt/cni/bin
+curl -L https://github.com/containernetworking/plugins/releases/download/v${VERSION}/cni-plugins-linux-${ARCH}-v${VERSION}.tgz \
+ | tar -C /opt/cni/bin -xz
+`, constant.DefaultCNIVersion)); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	if _, err := exec.RunWithOutput("command -v nerdctl"); err != nil {
 		if err := exec.Run(fmt.Sprintf(`
 set -e
@@ -151,7 +193,7 @@ ARCH=amd64
 mkdir -p /opt/cni/bin
 curl -L https://github.com/containernetworking/plugins/releases/download/v${VERSION}/cni-plugins-linux-${ARCH}-v${VERSION}.tgz \
  | tar -C /opt/cni/bin -xz
-`, defaultCNIVersion)); err != nil {
+`, constant.DefaultCNIVersion)); err != nil {
 			return err
 		}
 	}

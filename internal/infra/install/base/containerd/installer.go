@@ -2,20 +2,21 @@ package containerd
 
 import (
 	"context"
-	osdriver "devops-infra/internal/infra/os"
 	"fmt"
 	"strings"
 
 	"devops-infra/internal/constant"
+	"devops-infra/internal/infra/executor"
+	osdriver "devops-infra/internal/infra/os"
 )
 
 type Options struct {
 	Version  string
 	Arch     string
 	Checksum string
+	// EnsureCNIConfig creates a minimal CNI config when /etc/cni/net.d is empty.
+	EnsureCNIConfig bool
 }
-
-const defaultArch = "amd64"
 
 type Installer struct {
 	os   osdriver.Driver
@@ -29,8 +30,12 @@ func New(os osdriver.Driver, opts Options) *Installer {
 func (c *Installer) Name() string { return "containerd" }
 
 func (c *Installer) IsInstalled(ctx context.Context) bool {
+	exec := c.os.Exec()
+	if executor.IsDryRun(exec) {
+		return false
+	}
 	version, _ := c.resolveOptions()
-	output, err := c.os.Exec().RunWithOutput("containerd --version")
+	output, err := exec.RunWithOutput("containerd --version")
 	if err != nil {
 		return false
 	}
@@ -56,7 +61,7 @@ curl -L -o /tmp/containerd.tar.gz https://github.com/containerd/containerd/relea
 		return err
 	}
 
-	if checksum != "" {
+	if checksum != "" && !executor.IsDryRun(exec) {
 		sumOut, err := exec.RunWithOutput("sha256sum /tmp/containerd.tar.gz")
 		if err != nil {
 			return err
@@ -95,6 +100,12 @@ curl -sSL https://raw.githubusercontent.com/containerd/containerd/main/container
 		return err
 	}
 
+	if c.opts.EnsureCNIConfig {
+		if err := c.ensureCNIConfig(); err != nil {
+			return err
+		}
+	}
+
 	if err := exec.Run("systemctl daemon-reexec"); err != nil {
 		return err
 	}
@@ -116,8 +127,47 @@ func (c *Installer) resolveOptions() (string, string) {
 
 	arch := strings.TrimSpace(c.opts.Arch)
 	if arch == "" {
-		arch = defaultArch
+		arch = constant.DefaultContainerdArch
 	}
 
 	return version, arch
+}
+
+func (c *Installer) ensureCNIConfig() error {
+	exec := c.os.Exec()
+	checkCmd := "ls /etc/cni/net.d/*.conf /etc/cni/net.d/*.conflist 2>/dev/null | head -n 1"
+	output, err := exec.RunWithOutput(checkCmd)
+	if err == nil && strings.TrimSpace(output) != "" {
+		return nil
+	}
+
+	if err := exec.Run("mkdir -p /etc/cni/net.d"); err != nil {
+		return err
+	}
+
+	return exec.Run(fmt.Sprintf(`
+cat <<'EOF' > /etc/cni/net.d/99-nerdctl-bridge.conflist
+{
+  "cniVersion": "0.4.0",
+  "name": "nerdctl",
+  "plugins": [
+    {
+      "type": "bridge",
+      "bridge": "cni0",
+      "isGateway": true,
+      "ipMasq": true,
+      "ipam": {
+        "type": "host-local",
+        "ranges": [[{"subnet": "%s"}]],
+        "routes": [{"dst": "%s"}]
+      }
+    },
+    {
+      "type": "portmap",
+      "capabilities": {"portMappings": true}
+    }
+  ]
+}
+EOF
+`, constant.DefaultNerdctlCNISubnet, constant.DefaultNerdctlCNIRouteDst))
 }

@@ -6,6 +6,7 @@
 - `--sudo`：默认开启，以 sudo 执行命令。
 - `--dry-run`：仅打印将要执行的命令，不实际执行。
 - `--verbose`：输出更详细的执行信息。
+- `--timeout`：全局超时时间（默认 5m，传 0 关闭）。
 
 ### install 命令
 - `devops-infra install`：安装相关命令集合（目前仅实现 `base`）。
@@ -14,10 +15,11 @@
   - `--mirror-source`：指定系统镜像源（域名或别名，传入后自动启用 `--mirror`，支持 `国内-阿里云`、`教育网-清华`、`海外-xtom` 这样的分类写法）。
   - `--docker-install-mode=docker|nerdctl`：
     - `docker`：通过镜像脚本安装官方 Docker 并启动服务。
-    - `nerdctl`：自动安装 nerdctl/runc/cni，创建 `/usr/bin/docker` 软链接。
-  - `--docker-source`：指定 Docker CE 镜像源（域名或别名，支持 `国内-阿里云`、`教育网-清华`、`海外-docker`）。
+    - `nerdctl`：自动安装 nerdctl/runc/cni，创建 `/usr/bin/docker` 软链接；当 `/etc/cni/net.d` 为空时自动生成 `99-nerdctl-bridge.conflist` 最小 CNI 配置。
+  - `--docker-source`：指定 Docker CE 镜像源（域名或别名，仅 docker 模式生效，支持 `国内-阿里云`、`教育网-清华`、`海外-docker`）。
   - `--docker-registry-mirror`：配置 Docker registry 镜像（可多次传入或逗号分隔，仅 docker 模式生效，支持 `国内-1ms`、`海外-dockerhub`）。
-  - `--containerd-version`：指定 containerd 版本（默认 1.7.28）。
+  - `--docker-version`：指定 Docker Engine 版本（默认 27.5.1，仅 docker 模式生效）。
+  - `--containerd-version`：指定 containerd 版本（默认 2.1.0）。
   - `--containerd-arch`：指定 containerd 架构（默认 amd64）。
   - `--containerd-checksum`：指定 containerd tarball 的 sha256 校验值（可选）。
   - `--skip-kernel`：跳过 kernel/sysctl 配置。
@@ -56,10 +58,11 @@
 ### 示例
 - `devops-infra install base`
 - `devops-infra install base --mirror --dry-run`
-- `devops-infra install base --mirror-source=阿里云`
+- `devops-infra install base --mirror-source=aliyun`
 - `devops-infra install base --docker-install-mode=nerdctl`
 - `devops-infra install base --docker-source=国内-阿里云 --docker-registry-mirror=国内-1ms,国内-dockerproxy`
-- `devops-infra install base --containerd-version=1.7.28 --containerd-arch=arm64 --containerd-checksum=<sha256>`
+- `devops-infra install base --docker-version=27.5.1`
+- `devops-infra install base --containerd-version=2.1.0 --containerd-arch=arm64 --containerd-checksum=<sha256>`
 - `devops-infra install base --skip-kernel --skip-tools`
 - `devops-infra install k8s --kubernetes-version=1.28.15 --pod-network-cidr=10.244.0.0/16`
 
@@ -72,12 +75,18 @@
 ## 架构与流程
 命令流程示例：`devops-infra install base --mirror --dry-run`
 
+说明：CLI 默认使用本地单机执行；内部可通过 Topology/ExecutorFactory 接入 SSH，但当前命令行未暴露配置入口。
+
 ```
 cmd/install_base.go
   ↓
-infra/orchestration.InstallBase(ctx, options)
+infra/orchestration/flow.InstallBase(ctx, options)
   ↓
-os.Detect → executor.NewLocal(execOpts) → os.NewDriver(osInfo, exec)
+os.Detect (local) → topology.NewSingleNodeTopology
+  ↓
+executor.NewRuntime(ctx, trace/log) → execfactory.Build(node, runtime)
+  ↓
+os.NewDriver(osInfo, exec)
   ↓
 install_operation/base.New(...).Install()
 ```
@@ -102,7 +111,7 @@ install_operation/base.New(...).Install()
 ┌──────────────────────────────┴───────────────────────────────┐
 │ OS Driver + Executor                                         │
 │ debian / rhel | apt / yum / systemd / sysctl                 │
-│ executor: local / remote                                     │
+│ executor: local (CLI 默认) / ssh (内部可选)                   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -117,6 +126,6 @@ install_operation/base.New(...).Install()
 ┌──────────────────────┴───────────────────┐
 │            OS Driver + Executor          │
 │ debian / rhel | apt / yum / systemd      │
-│ sysctl + executor (local / remote)       │
+│ sysctl + executor (local / ssh)          │
 └──────────────────────────────────────────┘
 ```
