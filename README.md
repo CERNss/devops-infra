@@ -26,12 +26,34 @@
   - `--skip-tools`：跳过基础工具安装。
 
 ### 预留命令（尚未实现）
-- `devops-infra install k8s`：预留的 Kubernetes 安装入口。
 - `devops-infra install k3s`：预留的 K3s 安装入口。
 - `devops-infra install k3d`：预留的 K3d 安装入口。
 - `devops-infra status`：预留的状态检查入口。
 - `devops-infra doctor`：预留的环境诊断入口。
 - `devops-infra uninstall`：预留的卸载入口。
+
+### install k8s 命令
+- `devops-infra install k8s`：安装 Kubernetes（kubeadm）。
+  - `--kubernetes-version`：kubeadm init 版本（默认 1.28.15）。
+  - `--cri-socket`：CRI socket 路径（默认 containerd）。
+  - `--control-plane-endpoint`：控制面入口。
+  - `--apiserver-advertise-address`：API Server 宣告地址。
+  - `--pod-network-cidr`：Pod 网段（默认 10.244.0.0/16）。
+  - `--service-cidr`：Service 网段（默认 10.96.0.0/12）。
+  - `--service-dns-domain`：Service DNS 域（默认 cluster.local）。
+  - `--image-repository`：镜像仓库（默认 registry.k8s.io）。
+  - `--token`/`--token-ttl`：引导 token 与有效期。
+  - `--upload-certs`/`--certificate-key`：控制面证书上传配置。
+  - `--ignore-preflight-errors`：忽略指定预检。
+  - `--feature-gates`：功能开关。
+  - `--patches`：kubeadm patches 目录。
+  - `--config`：kubeadm 配置文件（使用该参数将忽略其他 init 参数）。
+  - `--disable-selinux`：关闭 SELinux（仅 RHEL）。
+  - `--disable-firewall`：关闭 firewalld/ufw。
+  - `--skip-init`：跳过 kubeadm init。
+  - `--setup-kubeconfig`：配置 root 的 kubeconfig（默认 true）。
+  - `--cni`：CNI 插件（flannel|calico|none，默认 flannel）。
+  - `--skip-cni`：跳过 CNI 安装。
 
 ### 示例
 - `devops-infra install base`
@@ -42,6 +64,7 @@
 - `devops-infra install base --docker-version=27.5.1`
 - `devops-infra install base --containerd-version=2.1.0 --containerd-arch=arm64 --containerd-checksum=<sha256>`
 - `devops-infra install base --skip-kernel --skip-tools`
+- `devops-infra install k8s --kubernetes-version=1.28.15 --pod-network-cidr=10.244.0.0/16`
 
 ### 镜像分类与别名
 - 分类前缀：`国内`/`默认`/`大陆`/`cn`/`default`，`教育网`/`教育`/`校园`/`edu`，`海外`/`境外`/`abroad`/`overseas`。

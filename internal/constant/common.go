@@ -6,6 +6,7 @@ const (
 	DefaultContainerdVersion   = "2.1.0"
 	DefaultContainerdArch      = "amd64"
 	DefaultDockerEngineVersion = "27.5.1"
+	DefaultK8sVersion          = "1.28.15"
 	DefaultKnownHostsPath      = "~/.ssh/known_hosts"
 	DefaultSSHPort             = 22
 	DefaultLogDir              = "logs"
