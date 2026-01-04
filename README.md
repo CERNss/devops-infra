@@ -22,6 +22,12 @@
   - `--containerd-version`：指定 containerd 版本（默认 2.1.0）。
   - `--containerd-arch`：指定 containerd 架构（默认 amd64）。
   - `--containerd-checksum`：指定 containerd tarball 的 sha256 校验值（可选）。
+  - `--cni-subnet`：nerdctl 模式下的 CNI 子网（默认 10.88.0.0/16）。
+  - `--cni-route-dst`：nerdctl 模式下的 CNI 路由目标（默认 0.0.0.0/0）。
+  - `--log-dir`：日志目录（默认 logs）。
+  - `--enable-log`：是否启用运行日志与命令输出日志（默认 true）。
+  - `--trace-dir`：trace 目录（默认 trace/trace.jsonl）。
+  - `--enable-trace`：是否启用 trace 事件（默认 true）。
   - `--skip-kernel`：跳过 kernel/sysctl 配置。
   - `--skip-tools`：跳过基础工具安装。
 
@@ -63,6 +69,8 @@
 - `devops-infra install base --docker-source=国内-阿里云 --docker-registry-mirror=国内-1ms,国内-dockerproxy`
 - `devops-infra install base --docker-version=27.5.1`
 - `devops-infra install base --containerd-version=2.1.0 --containerd-arch=arm64 --containerd-checksum=<sha256>`
+- `devops-infra install base --cni-subnet=10.88.0.0/16 --cni-route-dst=0.0.0.0/0`
+- `devops-infra install base --log-dir=/var/log/devops-infra --enable-log=false --enable-trace=false`
 - `devops-infra install base --skip-kernel --skip-tools`
 - `devops-infra install k8s --kubernetes-version=1.28.15 --pod-network-cidr=10.244.0.0/16`
 

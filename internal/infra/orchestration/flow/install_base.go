@@ -5,9 +5,6 @@ import (
 	"fmt"
 
 	"devops-infra/internal/infra/executor"
-	"devops-infra/internal/interceptor"
-	logmw "devops-infra/internal/middleware/log"
-	tracemw "devops-infra/internal/middleware/trace"
 	"devops-infra/internal/infra/install/base"
 	"devops-infra/internal/infra/install/base/cni"
 	"devops-infra/internal/infra/install/base/containerd"
@@ -18,6 +15,9 @@ import (
 	"devops-infra/internal/infra/orchestration/execfactory"
 	"devops-infra/internal/infra/orchestration/topology"
 	"devops-infra/internal/infra/os"
+	"devops-infra/internal/interceptor"
+	logmw "devops-infra/internal/middleware/log"
+	tracemw "devops-infra/internal/middleware/trace"
 )
 
 type InstallBaseOptions struct {
@@ -37,6 +37,8 @@ type InstallBaseOptions struct {
 	ContainerdVersion     string
 	ContainerdArch        string
 	ContainerdChecksum    string
+	CNISubnet             string
+	CNIRouteDst           string
 	SkipKernel            bool
 	SkipTools             bool
 }
@@ -118,22 +120,22 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	}))
 
 	containerdInstaller := containerd.New(driver, containerd.Options{
-		Version:          opts.ContainerdVersion,
-		Arch:             opts.ContainerdArch,
-		Checksum:         opts.ContainerdChecksum,
-		EnsureCNIConfig:  true,
+		Version:         opts.ContainerdVersion,
+		Arch:            opts.ContainerdArch,
+		Checksum:        opts.ContainerdChecksum,
+		EnsureCNIConfig: true,
 	})
 
 	if mode == docker.InstallModeNerdctl {
 		components = append(
 			components,
+			containerdInstaller,
 			docker.New(driver, docker.Options{
 				Mode:            mode,
 				Source:          opts.DockerMirrorSource,
 				RegistryMirrors: opts.DockerRegistryMirrors,
 				EngineVersion:   opts.DockerEngineVersion,
 			}),
-			containerdInstaller,
 		)
 	} else {
 		components = append(

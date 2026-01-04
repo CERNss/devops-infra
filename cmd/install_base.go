@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/hex"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -10,6 +11,8 @@ import (
 	"devops-infra/internal/constant"
 	"devops-infra/internal/infra/install/base/docker"
 	"devops-infra/internal/infra/orchestration/flow"
+	"devops-infra/internal/middleware/log"
+	"devops-infra/internal/middleware/trace"
 	"devops-infra/internal/utils/mirror"
 )
 
@@ -23,6 +26,12 @@ var (
 	containerdVersion     string
 	containerdArch        string
 	containerdChecksum    string
+	cniSubnet             string
+	cniRouteDst           string
+	logDir                string
+	enableLog             bool
+	traceDir              string
+	enableTrace           bool
 	skipKernel            bool
 	skipTools             bool
 )
@@ -89,6 +98,10 @@ var installBaseCmd = &cobra.Command{
 		containerdVersion = strings.TrimSpace(containerdVersion)
 		containerdArch = strings.TrimSpace(containerdArch)
 		containerdChecksum = strings.TrimSpace(containerdChecksum)
+		cniSubnet = strings.TrimSpace(cniSubnet)
+		cniRouteDst = strings.TrimSpace(cniRouteDst)
+		logDir = strings.TrimSpace(logDir)
+		traceDir = strings.TrimSpace(traceDir)
 		if containerdChecksum != "" {
 			if len(containerdChecksum) != 64 {
 				return fmt.Errorf("invalid containerd checksum length: %d", len(containerdChecksum))
@@ -97,11 +110,40 @@ var installBaseCmd = &cobra.Command{
 				return fmt.Errorf("invalid containerd checksum: %w", err)
 			}
 		}
+		if cniSubnet == "" {
+			cniSubnet = constant.DefaultNerdctlCNISubnet
+		}
+		if cniRouteDst == "" {
+			cniRouteDst = constant.DefaultNerdctlCNIRouteDst
+		}
+
+		var traceSink trace.TraceSink
+		if !enableTrace {
+			traceSink = trace.NoopTraceSink()
+		} else if traceDir != "" {
+			tracePath := filepath.Join(traceDir, "trace.jsonl")
+			sink, err := trace.NewFileTraceSink(tracePath)
+			if err != nil {
+				return err
+			}
+			traceSink = sink
+		}
+
+		var outputFactory log.OutputSinkFactory
+		var logger log.Logger
+		if !enableLog {
+			outputFactory = log.NoopOutputSinkFactory{}
+			logger = log.NoopLogger()
+		}
 
 		return flow.InstallBase(
 			cmd.Context(),
 			flow.InstallBaseOptions{
 				ExecOpts:              execOpts,
+				TraceSink:             traceSink,
+				OutputFactory:         outputFactory,
+				Logger:                logger,
+				LogDir:                logDir,
 				EnableMirror:          enableMirror,
 				LinuxMirrorSource:     linuxMirrorSource,
 				DockerInstallMode:     docker.InstallMode(dockerInstallMode),
@@ -111,6 +153,8 @@ var installBaseCmd = &cobra.Command{
 				ContainerdVersion:     containerdVersion,
 				ContainerdArch:        containerdArch,
 				ContainerdChecksum:    containerdChecksum,
+				CNISubnet:             cniSubnet,
+				CNIRouteDst:           cniRouteDst,
 				SkipKernel:            skipKernel,
 				SkipTools:             skipTools,
 			},
@@ -182,6 +226,48 @@ func init() {
 		"containerd-checksum",
 		"",
 		"containerd tarball sha256 checksum",
+	)
+
+	installBaseCmd.Flags().StringVar(
+		&cniSubnet,
+		"cni-subnet",
+		constant.DefaultNerdctlCNISubnet,
+		"cni subnet for nerdctl (default: 10.88.0.0/16)",
+	)
+
+	installBaseCmd.Flags().StringVar(
+		&cniRouteDst,
+		"cni-route-dst",
+		constant.DefaultNerdctlCNIRouteDst,
+		"cni route destination for nerdctl (default: 0.0.0.0/0)",
+	)
+
+	installBaseCmd.Flags().StringVar(
+		&logDir,
+		"log-dir",
+		constant.DefaultLogDir,
+		"log directory (default: logs)",
+	)
+
+	installBaseCmd.Flags().BoolVar(
+		&enableLog,
+		"enable-log",
+		true,
+		"enable run log and command output logs",
+	)
+
+	installBaseCmd.Flags().StringVar(
+		&traceDir,
+		"trace-dir",
+		"",
+		"trace directory (default: trace/trace.jsonl)",
+	)
+
+	installBaseCmd.Flags().BoolVar(
+		&enableTrace,
+		"enable-trace",
+		true,
+		"enable trace events",
 	)
 
 	installBaseCmd.Flags().BoolVar(

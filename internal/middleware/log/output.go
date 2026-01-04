@@ -128,6 +128,12 @@ func NoopOutputSink() OutputSink {
 	return noopOutputSink{}
 }
 
+type NoopOutputSinkFactory struct{}
+
+func (NoopOutputSinkFactory) Open(info RuntimeInfo, command string) (OutputSink, error) {
+	return NoopOutputSink(), nil
+}
+
 type CombinedOutputSinkFactory struct {
 	Dir  string
 	Path string

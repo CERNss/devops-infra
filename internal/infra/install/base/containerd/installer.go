@@ -16,6 +16,8 @@ type Options struct {
 	Checksum string
 	// EnsureCNIConfig creates a minimal CNI config when /etc/cni/net.d is empty.
 	EnsureCNIConfig bool
+	CNISubnet       string
+	CNIRouteDst     string
 }
 
 type Installer struct {
@@ -80,7 +82,12 @@ curl -L -o /tmp/containerd.tar.gz https://github.com/containerd/containerd/relea
 	}
 
 	if err := exec.Run(`
+set -e
 mkdir -p /etc/containerd
+if [ -f /etc/containerd/config.toml ]; then
+  ts=$(date +%Y%m%d%H%M%S)
+  mv /etc/containerd/config.toml /etc/containerd/config.toml.bak.${ts}
+fi
 containerd config default > /etc/containerd/config.toml
 `); err != nil {
 		return err
@@ -145,6 +152,15 @@ func (c *Installer) ensureCNIConfig() error {
 		return err
 	}
 
+	subnet := strings.TrimSpace(c.opts.CNISubnet)
+	if subnet == "" {
+		subnet = constant.DefaultNerdctlCNISubnet
+	}
+	routeDst := strings.TrimSpace(c.opts.CNIRouteDst)
+	if routeDst == "" {
+		routeDst = constant.DefaultNerdctlCNIRouteDst
+	}
+
 	return exec.Run(fmt.Sprintf(`
 cat <<'EOF' > /etc/cni/net.d/99-nerdctl-bridge.conflist
 {
@@ -169,5 +185,5 @@ cat <<'EOF' > /etc/cni/net.d/99-nerdctl-bridge.conflist
   ]
 }
 EOF
-`, constant.DefaultNerdctlCNISubnet, constant.DefaultNerdctlCNIRouteDst))
+`, subnet, routeDst))
 }
