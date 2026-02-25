@@ -94,6 +94,12 @@ func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
 	final := executor.Prepare(cmd, s.opts)
 	traceID := logmw.NewTraceID()
 	logCtx := logmw.WithTraceID(s.runtime.Ctx, traceID)
+	logCtx = logmw.WithFields(logCtx, map[string]any{
+		"command":   final,
+		"node":      s.runtime.NodeName,
+		"node_addr": s.runtime.NodeAddr,
+		"component": s.runtime.Component,
+	})
 	logger := s.runtime.Logger
 	if logger == nil {
 		logger = logmw.NoopLogger()
@@ -101,14 +107,21 @@ func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
 
 	if s.opts.DryRun {
 		executor.PrintCommandStart(s.opts.Verbose, true, final)
-		logger.Info(logCtx, fmt.Sprintf("exec dry-run: %s", final))
+		logger.Info(logmw.WithFields(logCtx, map[string]any{
+			"event":       "command_dry_run",
+			"result":      "dry_run",
+			"duration_ms": int64(0),
+		}), "exec dry-run")
 		s.traceCommand(final, traceID, time.Now(), "", "", nil, true)
 		return "", nil
 	}
 
 	start := time.Now()
 	executor.PrintCommandStart(s.opts.Verbose, false, final)
-	logger.Info(logCtx, fmt.Sprintf("exec start: %s", final))
+	logger.Info(logmw.WithFields(logCtx, map[string]any{
+		"event":  "command_start",
+		"result": "running",
+	}), "exec start")
 	sink, err := s.runtime.Output.Open(logmw.RuntimeInfo{
 		Ctx:     s.runtime.Ctx,
 		Logger:  logger,
@@ -123,7 +136,14 @@ func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
 	session, err := s.client.NewSession()
 	if err != nil {
 		s.traceCommand(final, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
-		logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", final, err))
+		errorType := executor.ClassifyError(err)
+		logger.Error(logmw.WithFields(logCtx, map[string]any{
+			"event":       "command_done",
+			"result":      "failed",
+			"duration_ms": time.Since(start).Milliseconds(),
+			"error_type":  errorType,
+			"error":       err.Error(),
+		}), "exec failed")
 		executor.PrintCommandDone(s.opts.Verbose, start, final, err)
 		return "", err
 	}
@@ -147,10 +167,21 @@ func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
 		err = s.runWithContext(session, final)
 		s.traceCommand(final, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
 		if err != nil {
-			logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", final, err))
+			errorType := executor.ClassifyError(err)
+			logger.Error(logmw.WithFields(logCtx, map[string]any{
+				"event":       "command_done",
+				"result":      "failed",
+				"duration_ms": time.Since(start).Milliseconds(),
+				"error_type":  errorType,
+				"error":       err.Error(),
+			}), "exec failed")
 			executor.PrintCommandDone(s.opts.Verbose, start, final, err)
 		} else {
-			logger.Info(logCtx, fmt.Sprintf("exec done: %s", final))
+			logger.Info(logmw.WithFields(logCtx, map[string]any{
+				"event":       "command_done",
+				"result":      "success",
+				"duration_ms": time.Since(start).Milliseconds(),
+			}), "exec done")
 			executor.PrintCommandDone(s.opts.Verbose, start, final, nil)
 		}
 		return combinedBuf.String(), err
@@ -166,10 +197,21 @@ func (s *SSHExecutor) run(cmd string, capture bool) (string, error) {
 	err = s.runWithContext(session, final)
 	s.traceCommand(final, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
 	if err != nil {
-		logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", final, err))
+		errorType := executor.ClassifyError(err)
+		logger.Error(logmw.WithFields(logCtx, map[string]any{
+			"event":       "command_done",
+			"result":      "failed",
+			"duration_ms": time.Since(start).Milliseconds(),
+			"error_type":  errorType,
+			"error":       err.Error(),
+		}), "exec failed")
 		executor.PrintCommandDone(s.opts.Verbose, start, final, err)
 	} else {
-		logger.Info(logCtx, fmt.Sprintf("exec done: %s", final))
+		logger.Info(logmw.WithFields(logCtx, map[string]any{
+			"event":       "command_done",
+			"result":      "success",
+			"duration_ms": time.Since(start).Milliseconds(),
+		}), "exec done")
 		executor.PrintCommandDone(s.opts.Verbose, start, final, nil)
 	}
 	return "", err
@@ -256,11 +298,21 @@ func (s *SSHExecutor) traceCommand(
 
 	end := time.Now()
 	timedOut := err != nil && errors.Is(err, context.DeadlineExceeded)
+	result := "success"
+	if dryRun {
+		result = "dry_run"
+	} else if err != nil {
+		result = "failed"
+	}
+	errorType := executor.ClassifyError(err)
 	event := tracemw.NewTraceEvent(
 		command,
 		traceID,
 		s.runtime.NodeName,
 		s.runtime.NodeAddr,
+		s.runtime.Component,
+		result,
+		errorType,
 		stdoutPath,
 		stderrPath,
 		start,

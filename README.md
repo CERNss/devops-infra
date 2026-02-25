@@ -80,6 +80,36 @@
 - 常用 Docker CE 镜像别名：`阿里云`/`aliyun`，`腾讯云`/`tencent`，`华为云`/`huawei`，`网易`/`163`，`清华`/`tuna`，`北大`/`pku`，`浙大`/`zju`，`南大`/`nju`，`交大`/`sjtu`，`中科大`/`ustc`，`中科院`/`iscas`，`azure`，`docker`。
 - 常用 Docker Registry 别名：`1ms`，`dockerproxy`，`daocloud`，`1panel`，`阿里云`/`aliyun`，`腾讯云`/`tencent`，`dockerhub`。
 
+## 日志与错误收集
+
+### 结构化日志字段（Zap）
+- `trace_id`：命令级关联 ID。
+- `command`：执行命令（原始字符串）。
+- `component`：当前安装组件（如 `docker`、`containerd`、`k8s-init`）。
+- `node` / `node_addr`：执行节点信息。
+- `event`：生命周期事件（`command_start`、`command_done`、`command_dry_run`）。
+- `result`：`running` / `success` / `failed` / `dry_run`。
+- `duration_ms`：命令耗时（毫秒）。
+- `error_type`：错误分类（`exec_timeout`、`exec_nonzero`、`network_fetch`、`unsupported_os`、`validation_failed`、`unknown`）。
+
+### 本地错误聚合产物
+- 目录：`<log-dir>/errors/`（默认 `logs/errors/`）。
+- `run-<id>.errors.jsonl`：失败命令事件流（逐行 JSON）。
+- `run-<id>.summary.json`：运行级摘要（失败命令数、失败组件、产物路径等）。
+
+### 控制台失败摘要
+- 当安装流程存在失败命令时，CLI 会输出简要失败摘要（失败组件、部分失败命令、错误产物路径）。
+- 当安装流程成功时，不输出失败摘要块。
+
+### 常见排查步骤
+1. 查看控制台摘要中给出的 `errors.jsonl` 与 `summary.json` 路径。
+2. 按 `trace_id` 关联 `run.log` 与 output 日志，定位失败命令前后文。
+3. 根据 `error_type` 区分：
+   - `network_fetch`：镜像/网络抖动类问题；
+   - `validation_failed`：配置或后置校验不满足；
+   - `exec_nonzero`：命令返回非零退出码；
+   - `unsupported_os`：系统发行版/能力不支持。
+
 ## 架构与流程
 命令流程示例：`devops-infra install base --mirror --dry-run`
 

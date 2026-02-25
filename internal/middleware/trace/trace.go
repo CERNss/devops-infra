@@ -14,24 +14,33 @@ import (
 )
 
 type TraceEvent struct {
-	Command    string `json:"command"`
-	TraceID    string `json:"trace_id,omitempty"`
-	Node       string `json:"node,omitempty"`
-	NodeAddr   string `json:"node_addr,omitempty"`
-	StdoutPath string `json:"stdout_path,omitempty"`
-	StderrPath string `json:"stderr_path,omitempty"`
-	Start      string `json:"start"`
-	End        string `json:"end"`
-	DurationMs int64  `json:"duration_ms"`
-	Err        string `json:"error,omitempty"`
-	TimedOut   bool   `json:"timed_out,omitempty"`
-	DryRun     bool   `json:"dry_run,omitempty"`
-	Stdout     string `json:"stdout,omitempty"`
-	Stderr     string `json:"stderr,omitempty"`
+	SchemaVersion string `json:"schema_version"`
+	Command       string `json:"command"`
+	TraceID       string `json:"trace_id,omitempty"`
+	Node          string `json:"node,omitempty"`
+	NodeAddr      string `json:"node_addr,omitempty"`
+	Component     string `json:"component,omitempty"`
+	Result        string `json:"result"`
+	ErrorType     string `json:"error_type,omitempty"`
+	StdoutPath    string `json:"stdout_path,omitempty"`
+	StderrPath    string `json:"stderr_path,omitempty"`
+	Start         string `json:"start"`
+	End           string `json:"end"`
+	DurationMs    int64  `json:"duration_ms"`
+	Err           string `json:"error,omitempty"`
+	TimedOut      bool   `json:"timed_out,omitempty"`
+	DryRun        bool   `json:"dry_run,omitempty"`
+	Stdout        string `json:"stdout,omitempty"`
+	Stderr        string `json:"stderr,omitempty"`
 }
 
 type TraceSink interface {
 	OnCommand(event TraceEvent)
+}
+
+type CloseableTraceSink interface {
+	TraceSink
+	Close() error
 }
 
 type stderrTraceSink struct {
@@ -107,11 +116,25 @@ func (s *fileTraceSink) OnCommand(event TraceEvent) {
 	s.mu.Unlock()
 }
 
+func (s *fileTraceSink) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.f == nil {
+		return nil
+	}
+	err := s.f.Close()
+	s.f = nil
+	return err
+}
+
 func NewTraceEvent(
 	command string,
 	traceID string,
 	nodeName string,
 	nodeAddr string,
+	component string,
+	result string,
+	errorType string,
 	stdoutPath string,
 	stderrPath string,
 	start time.Time,
@@ -123,19 +146,23 @@ func NewTraceEvent(
 	timedOut bool,
 ) TraceEvent {
 	event := TraceEvent{
-		Command:    command,
-		TraceID:    traceID,
-		Node:       nodeName,
-		NodeAddr:   nodeAddr,
-		StdoutPath: stdoutPath,
-		StderrPath: stderrPath,
-		Start:      start.Format(time.RFC3339Nano),
-		End:        end.Format(time.RFC3339Nano),
-		DurationMs: end.Sub(start).Milliseconds(),
-		Stdout:     stdout,
-		Stderr:     stderr,
-		DryRun:     dryRun,
-		TimedOut:   timedOut,
+		SchemaVersion: "v1",
+		Command:       command,
+		TraceID:       traceID,
+		Node:          nodeName,
+		NodeAddr:      nodeAddr,
+		Component:     component,
+		Result:        result,
+		ErrorType:     errorType,
+		StdoutPath:    stdoutPath,
+		StderrPath:    stderrPath,
+		Start:         start.Format(time.RFC3339Nano),
+		End:           end.Format(time.RFC3339Nano),
+		DurationMs:    end.Sub(start).Milliseconds(),
+		Stdout:        stdout,
+		Stderr:        stderr,
+		DryRun:        dryRun,
+		TimedOut:      timedOut,
 	}
 	if err != nil {
 		event.Err = err.Error()

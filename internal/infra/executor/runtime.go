@@ -9,13 +9,14 @@ import (
 )
 
 type Runtime struct {
-	Ctx      context.Context
-	Trace    tracemw.TraceSink
-	Output   logmw.OutputSinkFactory
-	Logger   logmw.Logger
-	LogDir   string
-	NodeName string
-	NodeAddr string
+	Ctx       context.Context
+	Trace     tracemw.TraceSink
+	Output    logmw.OutputSinkFactory
+	Logger    logmw.Logger
+	LogDir    string
+	NodeName  string
+	NodeAddr  string
+	Component string
 }
 
 func NewRuntime(ctx context.Context, trace tracemw.TraceSink) Runtime {
@@ -49,6 +50,18 @@ func normalizeRuntime(rt Runtime) Runtime {
 func WithNode(rt Runtime, name string, addr string) Runtime {
 	rt.NodeName = name
 	rt.NodeAddr = addr
+	rt.Ctx = logmw.WithFields(rt.Ctx, map[string]any{
+		"node":      name,
+		"node_addr": addr,
+	})
+	return rt
+}
+
+func WithComponent(rt Runtime, component string) Runtime {
+	rt.Component = component
+	rt.Ctx = logmw.WithFields(rt.Ctx, map[string]any{
+		"component": component,
+	})
 	return rt
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"devops-infra/internal/constant"
@@ -18,27 +19,71 @@ type zapLogger struct {
 }
 
 func (l *zapLogger) Info(ctx context.Context, msg string) {
-	l.logger.Info(msg, traceField(ctx))
+	l.logger.Info(msg, contextFields(ctx)...)
 }
 
 func (l *zapLogger) Warn(ctx context.Context, msg string) {
-	l.logger.Warn(msg, traceField(ctx))
+	l.logger.Warn(msg, contextFields(ctx)...)
 }
 
 func (l *zapLogger) Error(ctx context.Context, msg string) {
-	l.logger.Error(msg, traceField(ctx))
+	l.logger.Error(msg, contextFields(ctx)...)
 }
 
 func (l *zapLogger) Output(ctx context.Context, stream string, line string) {
-	l.logger.Info("cmd_output", traceField(ctx), zap.String("stream", stream), zap.String("output", line))
+	fields := contextFields(ctx)
+	fields = append(fields, zap.String("stream", stream), zap.String("output", line))
+	l.logger.Info("cmd_output", fields...)
 }
 
-func traceField(ctx context.Context) zap.Field {
+func contextFields(ctx context.Context) []zap.Field {
+	fields := make([]zap.Field, 0, 4)
 	traceID := logmw.TraceIDFromContext(ctx)
-	if traceID == "" {
-		return zap.Skip()
+	if traceID != "" {
+		fields = append(fields, zap.String("trace_id", traceID))
 	}
-	return zap.String("trace_id", traceID)
+	contextValues := logmw.FieldsFromContext(ctx)
+	if len(contextValues) == 0 {
+		return fields
+	}
+
+	keys := make([]string, 0, len(contextValues))
+	for key := range contextValues {
+		if key == "trace_id" {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		value := contextValues[key]
+		switch typed := value.(type) {
+		case string:
+			fields = append(fields, zap.String(key, typed))
+		case bool:
+			fields = append(fields, zap.Bool(key, typed))
+		case int:
+			fields = append(fields, zap.Int(key, typed))
+		case int32:
+			fields = append(fields, zap.Int32(key, typed))
+		case int64:
+			fields = append(fields, zap.Int64(key, typed))
+		case uint:
+			fields = append(fields, zap.Uint(key, typed))
+		case uint32:
+			fields = append(fields, zap.Uint32(key, typed))
+		case uint64:
+			fields = append(fields, zap.Uint64(key, typed))
+		case float64:
+			fields = append(fields, zap.Float64(key, typed))
+		case time.Duration:
+			fields = append(fields, zap.Duration(key, typed))
+		default:
+			fields = append(fields, zap.Any(key, value))
+		}
+	}
+	return fields
 }
 
 func NewJSONLogger(path string) (logmw.Logger, error) {

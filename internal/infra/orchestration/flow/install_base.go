@@ -3,6 +3,7 @@ package flow
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"devops-infra/internal/infra/executor"
 	"devops-infra/internal/infra/install/base"
@@ -12,9 +13,10 @@ import (
 	"devops-infra/internal/infra/install/base/kernel"
 	"devops-infra/internal/infra/install/base/mirror"
 	"devops-infra/internal/infra/install/base/tools"
+	"devops-infra/internal/infra/install/base/validate"
 	"devops-infra/internal/infra/orchestration/execfactory"
 	"devops-infra/internal/infra/orchestration/topology"
-	"devops-infra/internal/infra/os"
+	osinfra "devops-infra/internal/infra/os"
 	"devops-infra/internal/interceptor"
 	logmw "devops-infra/internal/middleware/log"
 	tracemw "devops-infra/internal/middleware/trace"
@@ -45,7 +47,7 @@ type InstallBaseOptions struct {
 
 func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	// 1. Detect OS
-	osInfo, err := os.Detect()
+	osInfo, err := osinfra.Detect()
 	if err != nil {
 		return err
 	}
@@ -77,6 +79,13 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	if logger == nil {
 		logger = interceptor.DefaultLogger(opts.LogDir)
 	}
+	aggregator, aggErr := tracemw.NewFailureAggregator(opts.LogDir, "install-base")
+	if aggErr != nil {
+		logger.Warn(ctx, fmt.Sprintf("failed to initialize failure aggregator: %v", aggErr))
+	} else {
+		trace = tracemw.NewMultiTraceSink(trace, aggregator)
+	}
+
 	runtime := executor.NewRuntime(ctx, trace)
 	if opts.OutputFactory != nil {
 		runtime = executor.WithOutput(runtime, opts.OutputFactory)
@@ -86,73 +95,111 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	}
 	runtime = executor.WithLogger(runtime, logger)
 
-	// 2. Create executor
-	exec, err := factory.Build(node, runtime)
-	if err != nil {
-		return err
-	}
-
-	// 3. Create OS driver
-	driver, err := os.NewDriver(osInfo, exec)
-	if err != nil {
-		return err
-	}
-
 	mode := opts.DockerInstallMode
 	if mode == "" {
 		mode = docker.InstallModeOfficial
 	}
 
-	// 4. Build base base
+	newDriver := func(component string) (osinfra.Driver, error) {
+		componentRuntime := executor.WithComponent(runtime, component)
+		exec, buildErr := factory.Build(node, componentRuntime)
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		return osinfra.NewDriver(osInfo, exec)
+	}
+
+	// 2. Build base components
 	components := []base.Component{}
 	if !opts.SkipKernel {
+		driver, driverErr := newDriver("kernel")
+		if driverErr != nil {
+			return driverErr
+		}
 		components = append(components, kernel.New(driver))
 	}
-	components = append(components, mirror.New(driver, mirror.Options{
+
+	driverMirror, err := newDriver("system-mirror")
+	if err != nil {
+		return err
+	}
+	components = append(components, mirror.New(driverMirror, mirror.Options{
 		Enable: opts.EnableMirror,
 		Source: opts.LinuxMirrorSource,
 	}))
+
 	if !opts.SkipTools {
+		driver, driverErr := newDriver("common-tools")
+		if driverErr != nil {
+			return driverErr
+		}
 		components = append(components, tools.New(driver))
 	}
-	components = append(components, cni.New(driver, cni.Options{
+
+	driverCNI, err := newDriver("cni-plugins")
+	if err != nil {
+		return err
+	}
+	components = append(components, cni.New(driverCNI, cni.Options{
 		Arch: opts.ContainerdArch,
 	}))
 
-	containerdInstaller := containerd.New(driver, containerd.Options{
+	driverContainerd, err := newDriver("containerd")
+	if err != nil {
+		return err
+	}
+	containerdInstaller := containerd.New(driverContainerd, containerd.Options{
 		Version:         opts.ContainerdVersion,
 		Arch:            opts.ContainerdArch,
 		Checksum:        opts.ContainerdChecksum,
 		EnsureCNIConfig: true,
+		CNISubnet:       opts.CNISubnet,
+		CNIRouteDst:     opts.CNIRouteDst,
+	})
+
+	driverDocker, err := newDriver("docker")
+	if err != nil {
+		return err
+	}
+	dockerInstaller := docker.New(driverDocker, docker.Options{
+		Mode:            mode,
+		Source:          opts.DockerMirrorSource,
+		RegistryMirrors: opts.DockerRegistryMirrors,
+		EngineVersion:   opts.DockerEngineVersion,
 	})
 
 	if mode == docker.InstallModeNerdctl {
 		components = append(
 			components,
 			containerdInstaller,
-			docker.New(driver, docker.Options{
-				Mode:            mode,
-				Source:          opts.DockerMirrorSource,
-				RegistryMirrors: opts.DockerRegistryMirrors,
-				EngineVersion:   opts.DockerEngineVersion,
-			}),
+			dockerInstaller,
 		)
 	} else {
 		components = append(
 			components,
-			docker.New(driver, docker.Options{
-				Mode:            mode,
-				Source:          opts.DockerMirrorSource,
-				RegistryMirrors: opts.DockerRegistryMirrors,
-				EngineVersion:   opts.DockerEngineVersion,
-			}),
+			dockerInstaller,
 			containerdInstaller,
 		)
 	}
 
-	installer := base.New(components...).WithLogger(logger)
+	driverValidate, err := newDriver("base-postflight")
+	if err != nil {
+		return err
+	}
+	components = append(components, validate.New(driverValidate, validate.Options{Mode: mode}))
 
-	// 5. Run
+	installer := base.New(components...).WithLogger(logger)
+	if aggregator != nil {
+		defer func() {
+			_ = aggregator.Close()
+			if !aggregator.HasFailures() {
+				return
+			}
+			fmt.Fprint(os.Stdout, tracemw.FormatFailureSummary(aggregator.Summary()))
+		}()
+	}
+
+	// 3. Run
 	logger.Info(ctx, "install-base: start")
 	if err := installer.Install(ctx); err != nil {
 		logger.Error(ctx, fmt.Sprintf("install-base: failed: %v", err))

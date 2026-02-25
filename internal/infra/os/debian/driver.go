@@ -2,6 +2,7 @@ package debian
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"devops-infra/internal/infra/executor"
@@ -60,7 +61,13 @@ func (d *Driver) LoadKernelModules(mods ...string) error {
 }
 
 func (d *Driver) Sysctl(settings map[string]string) error {
-	for k, v := range settings {
+	keys := make([]string, 0, len(settings))
+	for key := range settings {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := settings[k]
 		if err := d.exec.Run(fmt.Sprintf("sysctl -w %s=%s", k, v)); err != nil {
 			return err
 		}

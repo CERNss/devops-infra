@@ -2,13 +2,17 @@ package orchestration
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strings"
 
 	"devops-infra/internal/constant"
 	"devops-infra/internal/infra/executor"
 	"devops-infra/internal/infra/install/base"
-	"devops-infra/internal/infra/os"
+	osinfra "devops-infra/internal/infra/os"
 	platformk8s "devops-infra/internal/infra/platform/k8s"
+	"devops-infra/internal/interceptor"
+	tracemw "devops-infra/internal/middleware/trace"
 )
 
 type InstallK8sOptions struct {
@@ -38,35 +42,65 @@ type InstallK8sOptions struct {
 }
 
 func InstallK8s(ctx context.Context, opts InstallK8sOptions) error {
-	osInfo, err := os.Detect()
+	osInfo, err := osinfra.Detect()
 	if err != nil {
 		return err
 	}
 
-	exec := executor.NewLocal(opts.ExecOpts)
-	driver, err := os.NewDriver(osInfo, exec)
-	if err != nil {
-		return err
+	trace := tracemw.DefaultTraceSink()
+	logger := interceptor.DefaultLogger(constant.DefaultLogDir)
+	aggregator, aggErr := tracemw.NewFailureAggregator(constant.DefaultLogDir, "install-k8s")
+	if aggErr != nil {
+		logger.Warn(ctx, fmt.Sprintf("failed to initialize failure aggregator: %v", aggErr))
+	} else {
+		trace = tracemw.NewMultiTraceSink(trace, aggregator)
 	}
+	runtime := executor.NewRuntime(ctx, trace)
+	runtime = executor.WithLogDir(runtime, constant.DefaultLogDir)
+	runtime = executor.WithLogger(runtime, logger)
 
 	normalized := normalizeK8sOptions(opts)
 
 	components := []base.Component{}
+	newDriver := func(component string) (osinfra.Driver, error) {
+		componentRuntime := executor.WithComponent(runtime, component)
+		exec := executor.NewLocalWithRuntime(opts.ExecOpts, componentRuntime)
+		return osinfra.NewDriver(osInfo, exec)
+	}
+
 	if normalized.DisableSELinux || normalized.DisableFirewall {
+		driver, driverErr := newDriver("k8s-preflight")
+		if driverErr != nil {
+			return driverErr
+		}
 		components = append(components, platformk8s.NewPreflight(driver, platformk8s.PreflightOptions{
 			DisableSELinux:  normalized.DisableSELinux,
 			DisableFirewall: normalized.DisableFirewall,
 		}))
 	}
-	components = append(components, platformk8s.NewRepo(driver, platformk8s.RepoOptions{
+
+	driverRepo, err := newDriver("k8s-repo")
+	if err != nil {
+		return err
+	}
+	components = append(components, platformk8s.NewRepo(driverRepo, platformk8s.RepoOptions{
 		Version: normalized.Version,
 	}))
-	components = append(components, platformk8s.NewPackages(driver, platformk8s.PackagesOptions{
+
+	driverPackages, err := newDriver("k8s-packages")
+	if err != nil {
+		return err
+	}
+	components = append(components, platformk8s.NewPackages(driverPackages, platformk8s.PackagesOptions{
 		Version: normalized.Version,
 	}))
 
 	if !normalized.SkipInit {
-		components = append(components, platformk8s.NewInit(driver, platformk8s.InitOptions{
+		driverInit, driverErr := newDriver("k8s-init")
+		if driverErr != nil {
+			return driverErr
+		}
+		components = append(components, platformk8s.NewInit(driverInit, platformk8s.InitOptions{
 			Version:                   normalized.Version,
 			CRISocket:                 normalized.CRISocket,
 			ControlPlaneEndpoint:      normalized.ControlPlaneEndpoint,
@@ -87,19 +121,48 @@ func InstallK8s(ctx context.Context, opts InstallK8sOptions) error {
 	}
 
 	if normalized.SetupKubeconfig {
-		components = append(components, platformk8s.NewKubeconfig(driver, platformk8s.KubeconfigOptions{
+		driverKubeconfig, driverErr := newDriver("k8s-kubeconfig")
+		if driverErr != nil {
+			return driverErr
+		}
+		components = append(components, platformk8s.NewKubeconfig(driverKubeconfig, platformk8s.KubeconfigOptions{
 			User: "root",
 		}))
 	}
 
 	if !normalized.SkipCNI {
-		components = append(components, platformk8s.NewCNI(driver, platformk8s.CNIOptions{
+		driverCNI, driverErr := newDriver("k8s-cni")
+		if driverErr != nil {
+			return driverErr
+		}
+		components = append(components, platformk8s.NewCNI(driverCNI, platformk8s.CNIOptions{
 			CNI:            normalized.CNI,
 			PodNetworkCIDR: normalized.PodNetworkCIDR,
 		}))
 	}
 
+	driverVerify, err := newDriver("k8s-verify")
+	if err != nil {
+		return err
+	}
+	components = append(components, platformk8s.NewVerify(driverVerify, platformk8s.VerifyOptions{
+		SkipInit:        normalized.SkipInit,
+		SetupKubeconfig: normalized.SetupKubeconfig,
+		CNI:             normalized.CNI,
+		SkipCNI:         normalized.SkipCNI,
+	}))
+
 	installer := base.New(components...)
+	installer = installer.WithLogger(logger)
+	if aggregator != nil {
+		defer func() {
+			_ = aggregator.Close()
+			if !aggregator.HasFailures() {
+				return
+			}
+			fmt.Fprint(os.Stdout, tracemw.FormatFailureSummary(aggregator.Summary()))
+		}()
+	}
 	return installer.Install(ctx)
 }
 
@@ -124,6 +187,9 @@ func normalizeK8sOptions(opts InstallK8sOptions) InstallK8sOptions {
 	}
 	if strings.TrimSpace(opts.CNI) == "" {
 		opts.CNI = "flannel"
+	}
+	if opts.SkipInit {
+		opts.SkipCNI = true
 	}
 	return opts
 }

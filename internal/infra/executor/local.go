@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -45,6 +44,12 @@ func (e *LocalExecutor) run(cmd string, capture bool) (string, error) {
 	finalCmd := e.prepare(cmd)
 	traceID := logmw.NewTraceID()
 	logCtx := logmw.WithTraceID(e.runtime.Ctx, traceID)
+	logCtx = logmw.WithFields(logCtx, map[string]any{
+		"command":   finalCmd,
+		"node":      e.runtime.NodeName,
+		"node_addr": e.runtime.NodeAddr,
+		"component": e.runtime.Component,
+	})
 	logger := e.runtime.Logger
 	if logger == nil {
 		logger = logmw.NoopLogger()
@@ -52,14 +57,21 @@ func (e *LocalExecutor) run(cmd string, capture bool) (string, error) {
 
 	if e.opts.DryRun {
 		PrintCommandStart(e.opts.Verbose, true, finalCmd)
-		logger.Info(logCtx, fmt.Sprintf("exec dry-run: %s", finalCmd))
+		logger.Info(logmw.WithFields(logCtx, map[string]any{
+			"event":       "command_dry_run",
+			"result":      "dry_run",
+			"duration_ms": int64(0),
+		}), "exec dry-run")
 		e.traceCommand(finalCmd, traceID, time.Now(), "", "", nil, true)
 		return "", nil
 	}
 
 	start := time.Now()
 	PrintCommandStart(e.opts.Verbose, false, finalCmd)
-	logger.Info(logCtx, fmt.Sprintf("exec start: %s", finalCmd))
+	logger.Info(logmw.WithFields(logCtx, map[string]any{
+		"event":  "command_start",
+		"result": "running",
+	}), "exec start")
 	sink, err := e.runtime.Output.Open(logmw.RuntimeInfo{
 		Ctx:     e.runtime.Ctx,
 		Logger:  logger,
@@ -96,10 +108,21 @@ func (e *LocalExecutor) run(cmd string, capture bool) (string, error) {
 		err = c.Run()
 		e.traceCommand(finalCmd, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
 		if err != nil {
-			logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", finalCmd, err))
+			errorType := ClassifyError(err)
+			logger.Error(logmw.WithFields(logCtx, map[string]any{
+				"event":       "command_done",
+				"result":      "failed",
+				"duration_ms": time.Since(start).Milliseconds(),
+				"error_type":  errorType,
+				"error":       err.Error(),
+			}), "exec failed")
 			PrintCommandDone(e.opts.Verbose, start, finalCmd, err)
 		} else {
-			logger.Info(logCtx, fmt.Sprintf("exec done: %s", finalCmd))
+			logger.Info(logmw.WithFields(logCtx, map[string]any{
+				"event":       "command_done",
+				"result":      "success",
+				"duration_ms": time.Since(start).Milliseconds(),
+			}), "exec done")
 			PrintCommandDone(e.opts.Verbose, start, finalCmd, nil)
 		}
 		return combinedBuf.String(), err
@@ -108,10 +131,21 @@ func (e *LocalExecutor) run(cmd string, capture bool) (string, error) {
 	err = c.Run()
 	e.traceCommand(finalCmd, traceID, start, sink.StdoutPath(), sink.StderrPath(), err, false)
 	if err != nil {
-		logger.Error(logCtx, fmt.Sprintf("exec failed: %s: %v", finalCmd, err))
+		errorType := ClassifyError(err)
+		logger.Error(logmw.WithFields(logCtx, map[string]any{
+			"event":       "command_done",
+			"result":      "failed",
+			"duration_ms": time.Since(start).Milliseconds(),
+			"error_type":  errorType,
+			"error":       err.Error(),
+		}), "exec failed")
 		PrintCommandDone(e.opts.Verbose, start, finalCmd, err)
 	} else {
-		logger.Info(logCtx, fmt.Sprintf("exec done: %s", finalCmd))
+		logger.Info(logmw.WithFields(logCtx, map[string]any{
+			"event":       "command_done",
+			"result":      "success",
+			"duration_ms": time.Since(start).Milliseconds(),
+		}), "exec done")
 		PrintCommandDone(e.opts.Verbose, start, finalCmd, nil)
 	}
 	return "", err
@@ -140,11 +174,21 @@ func (e *LocalExecutor) traceCommand(
 
 	end := time.Now()
 	timedOut := err != nil && errors.Is(err, context.DeadlineExceeded)
+	result := "success"
+	if dryRun {
+		result = "dry_run"
+	} else if err != nil {
+		result = "failed"
+	}
+	errorType := ClassifyError(err)
 	event := tracemw.NewTraceEvent(
 		command,
 		traceID,
 		e.runtime.NodeName,
 		e.runtime.NodeAddr,
+		e.runtime.Component,
+		result,
+		errorType,
 		stdoutPath,
 		stderrPath,
 		start,
