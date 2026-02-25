@@ -3,6 +3,7 @@ package orchestration
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -41,6 +42,26 @@ type InstallK8sOptions struct {
 	SkipCNI                   bool
 }
 
+type failureAggregator interface {
+	Close() error
+	HasFailures() bool
+	Summary() tracemw.FailureSummary
+}
+
+func finalizeFailureAggregator(aggregator failureAggregator, out io.Writer) {
+	if aggregator == nil {
+		return
+	}
+	_ = aggregator.Close()
+	if !aggregator.HasFailures() {
+		return
+	}
+	if out == nil {
+		out = io.Discard
+	}
+	fmt.Fprint(out, tracemw.FormatFailureSummary(aggregator.Summary()))
+}
+
 func InstallK8s(ctx context.Context, opts InstallK8sOptions) error {
 	osInfo, err := osinfra.Detect()
 	if err != nil {
@@ -53,6 +74,7 @@ func InstallK8s(ctx context.Context, opts InstallK8sOptions) error {
 	if aggErr != nil {
 		logger.Warn(ctx, fmt.Sprintf("failed to initialize failure aggregator: %v", aggErr))
 	} else {
+		defer finalizeFailureAggregator(aggregator, os.Stdout)
 		trace = tracemw.NewMultiTraceSink(trace, aggregator)
 	}
 	runtime := executor.NewRuntime(ctx, trace)
@@ -154,15 +176,6 @@ func InstallK8s(ctx context.Context, opts InstallK8sOptions) error {
 
 	installer := base.New(components...)
 	installer = installer.WithLogger(logger)
-	if aggregator != nil {
-		defer func() {
-			_ = aggregator.Close()
-			if !aggregator.HasFailures() {
-				return
-			}
-			fmt.Fprint(os.Stdout, tracemw.FormatFailureSummary(aggregator.Summary()))
-		}()
-	}
 	return installer.Install(ctx)
 }
 
@@ -187,9 +200,6 @@ func normalizeK8sOptions(opts InstallK8sOptions) InstallK8sOptions {
 	}
 	if strings.TrimSpace(opts.CNI) == "" {
 		opts.CNI = "flannel"
-	}
-	if opts.SkipInit {
-		opts.SkipCNI = true
 	}
 	return opts
 }

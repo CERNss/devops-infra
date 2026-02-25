@@ -3,6 +3,7 @@ package flow
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"devops-infra/internal/infra/executor"
@@ -45,6 +46,26 @@ type InstallBaseOptions struct {
 	SkipTools             bool
 }
 
+type failureAggregator interface {
+	Close() error
+	HasFailures() bool
+	Summary() tracemw.FailureSummary
+}
+
+func finalizeFailureAggregator(aggregator failureAggregator, out io.Writer) {
+	if aggregator == nil {
+		return
+	}
+	_ = aggregator.Close()
+	if !aggregator.HasFailures() {
+		return
+	}
+	if out == nil {
+		out = io.Discard
+	}
+	fmt.Fprint(out, tracemw.FormatFailureSummary(aggregator.Summary()))
+}
+
 func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	// 1. Detect OS
 	osInfo, err := osinfra.Detect()
@@ -83,6 +104,7 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	if aggErr != nil {
 		logger.Warn(ctx, fmt.Sprintf("failed to initialize failure aggregator: %v", aggErr))
 	} else {
+		defer finalizeFailureAggregator(aggregator, os.Stdout)
 		trace = tracemw.NewMultiTraceSink(trace, aggregator)
 	}
 
@@ -189,15 +211,6 @@ func InstallBase(ctx context.Context, opts InstallBaseOptions) error {
 	components = append(components, validate.New(driverValidate, validate.Options{Mode: mode}))
 
 	installer := base.New(components...).WithLogger(logger)
-	if aggregator != nil {
-		defer func() {
-			_ = aggregator.Close()
-			if !aggregator.HasFailures() {
-				return
-			}
-			fmt.Fprint(os.Stdout, tracemw.FormatFailureSummary(aggregator.Summary()))
-		}()
-	}
 
 	// 3. Run
 	logger.Info(ctx, "install-base: start")
