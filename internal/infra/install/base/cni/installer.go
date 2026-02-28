@@ -31,10 +31,10 @@ func (c *Installer) IsInstalled(ctx context.Context) bool {
 	if executor.IsDryRun(exec) {
 		return false
 	}
-	if _, err := exec.RunWithOutput("test -x /opt/cni/bin/bridge"); err != nil {
+	if !executor.ProbeSuccess(exec, "test -x /opt/cni/bin/bridge") {
 		return false
 	}
-	if _, err := exec.RunWithOutput("test -x /opt/cni/bin/portmap"); err != nil {
+	if !executor.ProbeSuccess(exec, "test -x /opt/cni/bin/portmap") {
 		return false
 	}
 	return true

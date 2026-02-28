@@ -23,7 +23,7 @@ func (k *Installer) IsInstalled(ctx context.Context) bool {
 	if executor.IsDryRun(exec) {
 		return false
 	}
-	output, err := exec.RunWithOutput("sysctl -n net.bridge.bridge-nf-call-iptables net.bridge.bridge-nf-call-ip6tables net.ipv4.ip_forward")
+	output, err := exec.RunWithOutput("sysctl -n net.bridge.bridge-nf-call-iptables net.bridge.bridge-nf-call-ip6tables net.ipv4.ip_forward 2>/dev/null || true")
 	if err != nil {
 		return false
 	}

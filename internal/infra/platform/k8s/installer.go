@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"devops-infra/internal/infra/executor"
 	osdriver "devops-infra/internal/infra/os"
 )
 
@@ -81,11 +82,9 @@ func (r *RepoInstaller) IsInstalled(ctx context.Context) bool {
 	exec := r.os.Exec()
 	switch r.os.Family() {
 	case "rhel":
-		_, err := exec.RunWithOutput("test -f /etc/yum.repos.d/kubernetes.repo")
-		return err == nil
+		return executor.ProbeSuccess(exec, "test -f /etc/yum.repos.d/kubernetes.repo")
 	case "debian":
-		_, err := exec.RunWithOutput("test -f /etc/apt/sources.list.d/kubernetes.list")
-		return err == nil
+		return executor.ProbeSuccess(exec, "test -f /etc/apt/sources.list.d/kubernetes.list")
 	default:
 		return false
 	}
@@ -156,13 +155,13 @@ func (p *PackagesInstaller) Name() string { return "k8s-packages" }
 
 func (p *PackagesInstaller) IsInstalled(ctx context.Context) bool {
 	exec := p.os.Exec()
-	if _, err := exec.RunWithOutput("command -v kubeadm"); err != nil {
+	if !executor.ProbeSuccess(exec, "command -v kubeadm") {
 		return false
 	}
-	if _, err := exec.RunWithOutput("command -v kubelet"); err != nil {
+	if !executor.ProbeSuccess(exec, "command -v kubelet") {
 		return false
 	}
-	if _, err := exec.RunWithOutput("command -v kubectl"); err != nil {
+	if !executor.ProbeSuccess(exec, "command -v kubectl") {
 		return false
 	}
 	return true
@@ -231,8 +230,7 @@ func NewInit(os osdriver.Driver, opts InitOptions) *InitInstaller {
 func (i *InitInstaller) Name() string { return "k8s-init" }
 
 func (i *InitInstaller) IsInstalled(ctx context.Context) bool {
-	_, err := i.os.Exec().RunWithOutput("test -f /etc/kubernetes/admin.conf")
-	return err == nil
+	return executor.ProbeSuccess(i.os.Exec(), "test -f /etc/kubernetes/admin.conf")
 }
 
 func (i *InitInstaller) Install(ctx context.Context) error {
@@ -310,8 +308,7 @@ func (k *KubeconfigInstaller) IsInstalled(ctx context.Context) bool {
 	if strings.TrimSpace(k.opts.User) == "" {
 		return true
 	}
-	_, err := k.os.Exec().RunWithOutput("test -f /root/.kube/config")
-	return err == nil
+	return executor.ProbeSuccess(k.os.Exec(), "test -f /root/.kube/config")
 }
 
 func (k *KubeconfigInstaller) Install(ctx context.Context) error {

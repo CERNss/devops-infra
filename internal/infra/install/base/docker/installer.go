@@ -56,11 +56,9 @@ func (d *Installer) IsInstalled(ctx context.Context) bool {
 	}
 	switch d.mode {
 	case InstallModeNerdctl:
-		_, err := exec.RunWithOutput("test -L /usr/bin/docker")
-		return err == nil
+		return executor.ProbeSuccess(exec, "test -L /usr/bin/docker")
 	case InstallModeOfficial, "":
-		_, err := exec.RunWithOutput("docker --version")
-		return err == nil
+		return executor.ProbeSuccess(exec, "docker --version")
 	default:
 		return false
 	}
@@ -161,7 +159,7 @@ curl -L https://github.com/containernetworking/plugins/releases/download/v${VERS
 		return nil
 	}
 
-	if _, err := exec.RunWithOutput("command -v nerdctl"); err != nil {
+	if !executor.ProbeSuccess(exec, "command -v nerdctl") {
 		if err := exec.Run(fmt.Sprintf(`
 set -e
 VERSION=%s
@@ -173,7 +171,7 @@ curl -L https://github.com/containerd/nerdctl/releases/download/v${VERSION}/nerd
 		}
 	}
 
-	if _, err := exec.RunWithOutput("command -v runc"); err != nil {
+	if !executor.ProbeSuccess(exec, "command -v runc") {
 		if err := exec.Run(fmt.Sprintf(`
 set -e
 VERSION=%s
@@ -185,7 +183,7 @@ chmod +x /usr/local/sbin/runc
 		}
 	}
 
-	if _, err := exec.RunWithOutput("test -x /opt/cni/bin/bridge"); err != nil {
+	if !executor.ProbeSuccess(exec, "test -x /opt/cni/bin/bridge") {
 		if err := exec.Run(fmt.Sprintf(`
 set -e
 VERSION=%s

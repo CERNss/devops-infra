@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"strings"
 
 	"devops-infra/internal/infra/executor"
 	osdriver "devops-infra/internal/infra/os"
@@ -25,8 +24,7 @@ func (t *Installer) IsInstalled(ctx context.Context) bool {
 	}
 	checks := []string{"curl", "gpg", "tar", "ip"}
 	for _, binary := range checks {
-		output, err := exec.RunWithOutput("command -v " + binary)
-		if err != nil || strings.TrimSpace(output) == "" {
+		if !executor.ProbeSuccess(exec, "command -v "+binary) {
 			return false
 		}
 	}

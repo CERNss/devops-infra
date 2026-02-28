@@ -36,6 +36,9 @@ func (c *Installer) IsInstalled(ctx context.Context) bool {
 	if executor.IsDryRun(exec) {
 		return false
 	}
+	if !executor.ProbeSuccess(exec, "command -v containerd") {
+		return false
+	}
 	version, _ := c.resolveOptions()
 	output, err := exec.RunWithOutput("containerd --version")
 	if err != nil {
@@ -143,8 +146,7 @@ func (c *Installer) resolveOptions() (string, string) {
 func (c *Installer) ensureCNIConfig() error {
 	exec := c.os.Exec()
 	checkCmd := "ls /etc/cni/net.d/*.conf /etc/cni/net.d/*.conflist 2>/dev/null | head -n 1"
-	output, err := exec.RunWithOutput(checkCmd)
-	if err == nil && strings.TrimSpace(output) != "" {
+	if executor.ProbeSuccess(exec, checkCmd) {
 		return nil
 	}
 
