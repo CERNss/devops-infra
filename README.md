@@ -1,5 +1,13 @@
 # devops-infra
 
+## 编译
+
+- 本机编译（当前平台）：
+  - `go build -o ./build/bin/devops-infra .`
+- Linux amd64 编译（发布版）：
+  - `mkdir -p build/bin`
+  - `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ./build/bin/devops-infra-linux-amd64 .`
+
 ## 命令与操作
 
 ### 全局参数
