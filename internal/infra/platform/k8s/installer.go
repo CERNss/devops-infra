@@ -7,6 +7,7 @@ import (
 
 	"devops-infra/internal/infra/executor"
 	osdriver "devops-infra/internal/infra/os"
+	"devops-infra/internal/infra/reconcile"
 )
 
 type PreflightOptions struct {
@@ -198,10 +199,24 @@ func (p *PackagesInstaller) IsInstalled(ctx context.Context) bool {
 	if !executor.ProbeSuccess(exec, "command -v kubectl") {
 		return false
 	}
+	if !executor.ProbeSuccess(exec, "systemctl is-active kubelet >/dev/null 2>&1") {
+		return false
+	}
 	return true
 }
 
 func (p *PackagesInstaller) Install(ctx context.Context) error {
+	_, err := reconcile.EnsureServiceHealthy(reconcile.ServiceOptions{
+		Exec:           p.os.Exec(),
+		Label:          "kubelet",
+		HealthCheckCmd: "command -v kubeadm >/dev/null 2>&1 && command -v kubelet >/dev/null 2>&1 && command -v kubectl >/dev/null 2>&1 && systemctl is-active kubelet >/dev/null 2>&1",
+		RestartCmd:     "systemctl restart kubelet",
+		Reinstall:      p.installFresh,
+	})
+	return err
+}
+
+func (p *PackagesInstaller) installFresh() error {
 	if err := p.os.Update(); err != nil {
 		return err
 	}

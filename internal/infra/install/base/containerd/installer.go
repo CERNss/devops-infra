@@ -8,6 +8,7 @@ import (
 	"devops-infra/internal/constant"
 	"devops-infra/internal/infra/executor"
 	osdriver "devops-infra/internal/infra/os"
+	"devops-infra/internal/infra/reconcile"
 )
 
 type Options struct {
@@ -45,13 +46,30 @@ func (c *Installer) IsInstalled(ctx context.Context) bool {
 		return false
 	}
 	if version == "" {
-		return true
+		return executor.ProbeSuccess(exec, "systemctl is-active containerd >/dev/null 2>&1")
 	}
 
-	return strings.Contains(output, version)
+	if !strings.Contains(output, version) {
+		return false
+	}
+	return executor.ProbeSuccess(exec, "systemctl is-active containerd >/dev/null 2>&1")
 }
 
 func (c *Installer) Install(ctx context.Context) error {
+	exec := c.os.Exec()
+	version, _ := c.resolveOptions()
+
+	_, err := reconcile.EnsureServiceHealthy(reconcile.ServiceOptions{
+		Exec:           exec,
+		Label:          "containerd",
+		HealthCheckCmd: c.healthCheckCmd(version),
+		RestartCmd:     "systemctl restart containerd",
+		Reinstall:      c.installFresh,
+	})
+	return err
+}
+
+func (c *Installer) installFresh() error {
 	exec := c.os.Exec()
 	version, arch := c.resolveOptions()
 	checksum := strings.TrimSpace(c.opts.Checksum)
@@ -127,6 +145,14 @@ curl -sSL https://raw.githubusercontent.com/containerd/containerd/main/container
 	}
 
 	return nil
+}
+
+func (c *Installer) healthCheckCmd(version string) string {
+	cmd := "command -v containerd >/dev/null 2>&1 && systemctl is-active containerd >/dev/null 2>&1"
+	if strings.TrimSpace(version) != "" {
+		cmd = fmt.Sprintf("command -v containerd >/dev/null 2>&1 && containerd --version | grep -F %q >/dev/null 2>&1 && systemctl is-active containerd >/dev/null 2>&1", version)
+	}
+	return cmd
 }
 
 func (c *Installer) resolveOptions() (string, string) {

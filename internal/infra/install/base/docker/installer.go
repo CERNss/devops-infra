@@ -8,6 +8,7 @@ import (
 	"devops-infra/internal/constant"
 	"devops-infra/internal/infra/executor"
 	osdriver "devops-infra/internal/infra/os"
+	"devops-infra/internal/infra/reconcile"
 	"devops-infra/internal/utils/mirror"
 )
 
@@ -58,7 +59,8 @@ func (d *Installer) IsInstalled(ctx context.Context) bool {
 	case InstallModeNerdctl:
 		return executor.ProbeSuccess(exec, "test -L /usr/bin/docker")
 	case InstallModeOfficial, "":
-		return executor.ProbeSuccess(exec, "docker --version")
+		return executor.ProbeSuccess(exec, "docker --version") &&
+			executor.ProbeSuccess(exec, "systemctl is-active docker >/dev/null 2>&1")
 	default:
 		return false
 	}
@@ -85,33 +87,19 @@ func (d *Installer) Install(ctx context.Context) error {
 		}
 		return exec.Run("ln -sf " + nerdctlPath + " /usr/bin/docker")
 	case InstallModeOfficial, "":
-		scriptPath, err := mirror.EnsureMirrorDockerScript()
-		if err != nil {
-			return err
-		}
-		cmd := fmt.Sprintf("bash %q", scriptPath)
 		engineVersion := strings.TrimSpace(d.engineVersion)
 		if engineVersion == "" {
 			engineVersion = constant.DefaultDockerEngineVersion
 		}
-		if d.source != "" {
-			cmd += fmt.Sprintf(" --source %q", d.source)
-		}
-		if len(d.registryMirrors) > 0 {
-			cmd += fmt.Sprintf(" --source-registry %q", strings.Join(d.registryMirrors, ","))
-		}
-		if engineVersion != "" {
-			cmd += fmt.Sprintf(" --designated-version %q", engineVersion)
-		}
-		if err := exec.Run(cmd); err != nil {
-			return err
-		}
-
-		err = exec.Run("systemctl enable docker")
-		if err != nil {
-			return err
-		}
-		err = exec.Run("systemctl restart docker")
+		_, err := reconcile.EnsureServiceHealthy(reconcile.ServiceOptions{
+			Exec:           exec,
+			Label:          "docker",
+			HealthCheckCmd: "command -v docker >/dev/null 2>&1 && systemctl is-active docker >/dev/null 2>&1",
+			RestartCmd:     "systemctl restart docker",
+			Reinstall: func() error {
+				return d.installOfficialFresh(engineVersion)
+			},
+		})
 		if err != nil {
 			return err
 		}
@@ -119,6 +107,31 @@ func (d *Installer) Install(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unsupported docker install mode: %s", d.mode)
 	}
+}
+
+func (d *Installer) installOfficialFresh(engineVersion string) error {
+	exec := d.os.Exec()
+	scriptPath, err := mirror.EnsureMirrorDockerScript()
+	if err != nil {
+		return err
+	}
+	cmd := fmt.Sprintf("bash %q", scriptPath)
+	if d.source != "" {
+		cmd += fmt.Sprintf(" --source %q", d.source)
+	}
+	if len(d.registryMirrors) > 0 {
+		cmd += fmt.Sprintf(" --source-registry %q", strings.Join(d.registryMirrors, ","))
+	}
+	if engineVersion != "" {
+		cmd += fmt.Sprintf(" --designated-version %q", engineVersion)
+	}
+	if err := exec.Run(cmd); err != nil {
+		return err
+	}
+	if err := exec.Run("systemctl enable docker"); err != nil {
+		return err
+	}
+	return exec.Run("systemctl restart docker")
 }
 
 func (d *Installer) ensureNerdctl() error {

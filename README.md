@@ -19,6 +19,8 @@
 ### install 命令
 - `devops-infra install`：安装相关命令集合（目前仅实现 `base`）。
 - `devops-infra install base`：安装基础环境（kernel/sysctl/cgroup、基础工具、docker、containerd）。
+  - 服务健康调谐：对 `containerd` 与官方 `docker` 执行有界策略 `healthy -> skip`、`unhealthy -> restart`、`restart 后仍不健康 -> reinstall`、`reinstall 后仍不健康 -> fail`。
+  - `--dry-run` 下会输出该调谐路径的计划动作，不会实际修改服务状态。
   - `--mirror`：切换系统软件源。
   - `--mirror-source`：指定系统镜像源（域名或别名，传入后自动启用 `--mirror`，支持 `国内-阿里云`、`教育网-清华`、`海外-xtom` 这样的分类写法）。
   - `--docker-install-mode=docker|nerdctl`：
@@ -48,6 +50,7 @@
 
 ### install k8s 命令
 - `devops-infra install k8s`：安装 Kubernetes（kubeadm）。
+  - 服务健康调谐：在 `k8s-packages` 阶段对 `kubelet` 应用同样的 `skip/restart/reinstall` 有界恢复策略。
   - `--kubernetes-version`：kubeadm init 版本（默认 1.28.15）。
   - `--cri-socket`：CRI socket 路径（默认 containerd）。
   - `--control-plane-endpoint`：控制面入口。
@@ -106,6 +109,10 @@
 - `run-<id>.errors.jsonl`：失败命令事件流（逐行 JSON）。
 - `run-<id>.summary.json`：运行级摘要（失败命令数、失败组件、产物路径等）。
 
+### Reconcile 事件标记
+- 当服务健康调谐触发时，会输出 `DEVOPS_INFRA_RECONCILE` 事件，包含 `service` 与 `event`（如 `skip_healthy`、`restart_recovered`、`reinstall_recovered`、`failed`）字段。
+- 若调谐最终失败，错误事件会附带 `stage`（如 `unhealthy_after_reinstall`），可直接在 `errors.jsonl`/控制台摘要中定位最终失败阶段。
+
 ### 控制台失败摘要
 - 当安装流程存在失败命令时，CLI 会输出简要失败摘要（失败组件、部分失败命令、错误产物路径）。
 - 当安装流程成功时，不输出失败摘要块。
@@ -121,6 +128,9 @@
 4. 若 `kubeadm init` 阶段报 `kubelet` 健康检查失败，优先确认 swap 已关闭：
    - `swapon --show` 应为空；
    - RHEL/Fedora 可额外检查 `systemctl status systemd-zram-setup@zram0.service`。
+5. 若怀疑是服务已安装但不健康导致的问题，可在日志中检索 `DEVOPS_INFRA_RECONCILE`：
+   - `grep -R "DEVOPS_INFRA_RECONCILE" logs/ -n`
+   - 根据 `event/stage` 判断是重启恢复、重装恢复还是不可恢复失败。
 
 ## 架构与流程
 命令流程示例：`devops-infra install base --mirror --dry-run`
