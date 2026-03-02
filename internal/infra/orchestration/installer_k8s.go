@@ -90,16 +90,15 @@ func InstallK8s(ctx context.Context, opts InstallK8sOptions) error {
 		return osinfra.NewDriver(osInfo, exec)
 	}
 
-	if normalized.DisableSELinux || normalized.DisableFirewall {
-		driver, driverErr := newDriver("k8s-preflight")
-		if driverErr != nil {
-			return driverErr
-		}
-		components = append(components, platformk8s.NewPreflight(driver, platformk8s.PreflightOptions{
-			DisableSELinux:  normalized.DisableSELinux,
-			DisableFirewall: normalized.DisableFirewall,
-		}))
+	driverPreflight, driverPreflightErr := newDriver("k8s-preflight")
+	if driverPreflightErr != nil {
+		return driverPreflightErr
 	}
+	components = append(components, platformk8s.NewPreflight(driverPreflight, platformk8s.PreflightOptions{
+		EnsureSwapOff:   true,
+		DisableSELinux:  normalized.DisableSELinux,
+		DisableFirewall: normalized.DisableFirewall,
+	}))
 
 	driverRepo, err := newDriver("k8s-repo")
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 )
 
 type PreflightOptions struct {
+	EnsureSwapOff   bool
 	DisableSELinux  bool
 	DisableFirewall bool
 }
@@ -26,7 +27,7 @@ func NewPreflight(os osdriver.Driver, opts PreflightOptions) *PreflightInstaller
 func (p *PreflightInstaller) Name() string { return "k8s-preflight" }
 
 func (p *PreflightInstaller) IsInstalled(ctx context.Context) bool {
-	if !p.opts.DisableSELinux && !p.opts.DisableFirewall {
+	if !p.opts.EnsureSwapOff && !p.opts.DisableSELinux && !p.opts.DisableFirewall {
 		return true
 	}
 	return false
@@ -34,6 +35,39 @@ func (p *PreflightInstaller) IsInstalled(ctx context.Context) bool {
 
 func (p *PreflightInstaller) Install(ctx context.Context) error {
 	exec := p.os.Exec()
+	if p.opts.EnsureSwapOff {
+		if err := exec.Run("swapoff -a || true"); err != nil {
+			return err
+		}
+		if err := exec.Run(`sed -ri '/^[^#].*[[:space:]]swap[[:space:]].*$/ s/^/#/' /etc/fstab 2>/dev/null || true`); err != nil {
+			return err
+		}
+		switch p.os.Family() {
+		case "rhel":
+			if err := exec.Run("systemctl disable --now systemd-zram-setup@zram0.service 2>/dev/null || true"); err != nil {
+				return err
+			}
+			if err := exec.Run("systemctl disable --now systemd-zram-setup@zram1.service 2>/dev/null || true"); err != nil {
+				return err
+			}
+			if err := exec.Run("systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true"); err != nil {
+				return err
+			}
+			if err := exec.Run("systemctl mask systemd-zram-setup@zram1.service 2>/dev/null || true"); err != nil {
+				return err
+			}
+			if err := exec.Run("systemctl mask systemd-zram-generator.service 2>/dev/null || true"); err != nil {
+				return err
+			}
+			if err := exec.Run("if command -v dnf >/dev/null 2>&1; then dnf -y remove zram-generator-defaults >/dev/null 2>&1 || true; fi"); err != nil {
+				return err
+			}
+		case "debian":
+			if err := exec.Run("if command -v apt-get >/dev/null 2>&1; then apt-get -y purge zram-config >/dev/null 2>&1 || true; fi"); err != nil {
+				return err
+			}
+		}
+	}
 	if p.opts.DisableSELinux && p.os.Family() == "rhel" {
 		if err := exec.Run("setenforce 0 || true"); err != nil {
 			return err
@@ -45,17 +79,17 @@ func (p *PreflightInstaller) Install(ctx context.Context) error {
 	if p.opts.DisableFirewall {
 		switch p.os.Family() {
 		case "rhel":
-			if err := exec.Run("systemctl stop firewalld"); err != nil {
+			if err := exec.Run("systemctl stop firewalld 2>/dev/null || true"); err != nil {
 				return err
 			}
-			if err := exec.Run("systemctl disable firewalld"); err != nil {
+			if err := exec.Run("systemctl disable firewalld 2>/dev/null || true"); err != nil {
 				return err
 			}
 		case "debian":
-			if err := exec.Run("systemctl stop ufw"); err != nil {
+			if err := exec.Run("systemctl stop ufw 2>/dev/null || true"); err != nil {
 				return err
 			}
-			if err := exec.Run("systemctl disable ufw"); err != nil {
+			if err := exec.Run("systemctl disable ufw 2>/dev/null || true"); err != nil {
 				return err
 			}
 		}

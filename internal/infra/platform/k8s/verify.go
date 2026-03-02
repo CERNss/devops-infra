@@ -40,6 +40,7 @@ func (v *VerifyInstaller) Install(context.Context) error {
 		{desc: "kubeadm binary", cmd: "command -v kubeadm"},
 		{desc: "kubelet binary", cmd: "command -v kubelet"},
 		{desc: "kubectl binary", cmd: "command -v kubectl"},
+		{desc: "swap disabled", cmd: "test -z \"$(swapon --noheadings 2>/dev/null)\""},
 	}
 
 	if !v.opts.SkipInit {

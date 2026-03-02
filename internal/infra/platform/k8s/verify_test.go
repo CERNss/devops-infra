@@ -22,6 +22,9 @@ func TestVerifyInstallerSkipInitValidatesApplicableChecksOnly(t *testing.T) {
 	if err := installer.Install(context.Background()); err != nil {
 		t.Fatalf("verify install failed: %v", err)
 	}
+	if !contains(exec.commands, "test -z \"$(swapon --noheadings 2>/dev/null)\"") {
+		t.Fatalf("expected swap check command, got commands=%v", exec.commands)
+	}
 
 	for _, cmd := range exec.commands {
 		if strings.Contains(cmd, "/etc/kubernetes/admin.conf") {

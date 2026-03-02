@@ -64,6 +64,7 @@
   - `--config`：kubeadm 配置文件（使用该参数将忽略其他 init 参数）。
   - `--disable-selinux`：关闭 SELinux（仅 RHEL）。
   - `--disable-firewall`：关闭 firewalld/ufw。
+  - 预检默认会执行 swap 处理（`swapoff -a`、注释 `/etc/fstab` 中 swap 项），并在 RHEL/Fedora 上额外处理常见 zram unit，避免 kubelet 因 swap 启动失败。
   - `--skip-init`：跳过 kubeadm init。
   - `--setup-kubeconfig`：配置 root 的 kubeconfig（默认 true）。
   - `--cni`：CNI 插件（flannel|calico|none，默认 flannel）。
@@ -117,6 +118,9 @@
    - `validation_failed`：配置或后置校验不满足；
    - `exec_nonzero`：命令返回非零退出码；
    - `unsupported_os`：系统发行版/能力不支持。
+4. 若 `kubeadm init` 阶段报 `kubelet` 健康检查失败，优先确认 swap 已关闭：
+   - `swapon --show` 应为空；
+   - RHEL/Fedora 可额外检查 `systemctl status systemd-zram-setup@zram0.service`。
 
 ## 架构与流程
 命令流程示例：`devops-infra install base --mirror --dry-run`
